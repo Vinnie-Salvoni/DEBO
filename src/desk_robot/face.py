@@ -347,7 +347,7 @@ class DeboFace:
         self.animate()
         try:
             self.voice.start_wake_listening(self._on_voice_event)
-            self.status.configure(text="LISTENING FOR HEY DEBO")
+            self.status.configure(text="LOADING VOICE MODEL…")
         except VoiceError as error:
             self.response = str(error)
             self.response_label.configure(text=self.response)
@@ -505,6 +505,20 @@ class DeboFace:
             except queue.Empty:
                 return
             if self.closed:
+                continue
+
+            if kind == "model_loading":
+                if not self.busy:
+                    self.status.configure(text="LOADING VOICE MODEL…", fg=self.current_accent())
+                    self.response_label.configure(text="Getting my ears ready… the first setup needs internet.")
+                continue
+
+            if kind == "model_ready":
+                if not self.busy:
+                    self.status.configure(text="LISTENING FOR HEY DEBO", fg=self.current_accent())
+                    self.response_label.configure(text="I'm here. Just say ‘Hey DEBO’ when you need me.")
+                    if self.state == "error":
+                        self.set_state("idle")
                 continue
 
             if kind == "wake":
