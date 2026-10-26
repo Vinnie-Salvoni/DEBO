@@ -127,6 +127,9 @@ class VoiceController:
         """Load the recognition model without blocking the GUI."""
         try:
             self._get_model()
+            # Drop audio captured while the model was warming up before opening
+            # the recognition gate, otherwise startup speech can be replayed.
+            self._drain_audio_queue()
             self._model_ready.set()
             self._emit("model_ready", "Listening for Hey DEBO")
         except VoiceError as error:
@@ -277,7 +280,11 @@ class VoiceController:
     def _process_utterance(self, audio: bytes) -> None:
         """Save and transcribe one utterance, then detect the wake phrase."""
         # Do not attempt transcription while the model is downloading.
-        if not self._model_ready.is_set():
+        if (
+            not self._model_ready.is_set()
+            or self._speaking.is_set()
+            or self._closed
+        ):
             return
 
         path = None
@@ -313,6 +320,11 @@ class VoiceController:
                     path.unlink(missing_ok=True)
                 except OSError:
                     pass
+
+        # TTS may have started while transcription was running. In that case
+        # discard the result instead of treating it as a wake phrase or command.
+        if self._speaking.is_set() or self._closed:
+            return
 
         normalised = self._normalise(transcript)
 
