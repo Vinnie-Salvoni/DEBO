@@ -342,7 +342,7 @@ class DeboFace:
         self.root.configure(bg=BG)
         self._build_interface()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
-        self.entry.focus_set()
+        self.status.configure(text="STARTING UP…")
         self.sound.play("startup")
         self.animate()
         try:
@@ -375,26 +375,20 @@ class DeboFace:
 
         controls = tk.Frame(self.root, bg=BG)
         controls.pack(fill="x", padx=24, pady=(0, 18))
-        self.entry = tk.Entry(
-            controls, font=("Segoe UI", 12), bg="#111923", fg=TEXT,
-            insertbackground=TEXT, relief="flat", bd=0, highlightthickness=1,
-            highlightbackground="#263444", highlightcolor="#00D9D0",
+        self.listen_hint = tk.Label(
+            controls,
+            text="SAY “HEY DEBO” TO TALK",
+            bg=BG,
+            fg=MUTED,
+            font=("Segoe UI", 9, "bold"),
         )
-        self.entry.pack(side="left", fill="x", expand=True, ipady=12)
-        self.entry.bind("<Return>", self.submit_message)
-        self.send_button = tk.Button(
-            controls, text="Send  ↗", command=self.submit_message,
-            font=("Segoe UI", 10, "bold"), bg="#12313A", fg="#D9FFFF",
-            activebackground="#1B4C58", activeforeground="#FFFFFF",
-            relief="flat", bd=0, padx=18, pady=10, cursor="hand2",
-        )
-        self.send_button.pack(side="left", padx=(8, 0))
+        self.listen_hint.pack(side="left", fill="x", expand=True, anchor="w")
         tk.Button(
             controls, text="⚙", command=self.open_settings, font=("Segoe UI", 13),
             bg="#111923", fg="#D4E5F2", activebackground="#263444",
             activeforeground="#FFFFFF", relief="flat", bd=0, padx=13, pady=7,
             cursor="hand2",
-        ).pack(side="left", padx=(8, 0))
+        ).pack(side="right")
 
     def close(self) -> None:
         if self.closed:
@@ -455,9 +449,12 @@ class DeboFace:
             self._thinking_bobs = 0
             self.gaze_pause_until = self.time + 0.45
         labels = {
-            "idle": "READY WHEN YOU ARE", "listening": "I'M LISTENING",
-            "thinking": "THINKING...", "speaking": "RESPONSE READY",
-            "happy": "HAPPY TO HELP", "error": "OOPS!",
+            "idle": "STANDBY",
+            "listening": "LISTENING TO YOU",
+            "thinking": "PROCESSING",
+            "speaking": "SPEAKING",
+            "happy": "RESPONSE READY",
+            "error": "RECOVERABLE ERROR",
         }
         self.status.configure(text=labels.get(state, "READY WHEN YOU ARE"))
         self.status.configure(fg=self.current_accent())
@@ -466,18 +463,16 @@ class DeboFace:
         """Queue voice events for the Tk thread; the audio worker never touches widgets."""
         self.results.put((event, text, -1))
 
-    def submit_message(self, _event=None) -> None:
-        message = self.entry.get().strip()
+    def submit_message(self, message: str) -> None:
+        """Process a recognised voice transcript without any text-entry UI."""
+        message = str(message).strip()
         if not message or self.busy or self.closed:
             return
         self._request_id += 1
         request_id = self._request_id
-        self.entry.delete(0, "end")
         self.busy = True
         self.response = ""
         self.response_label.configure(text="Let me think about that…")
-        self.entry.configure(state="disabled")
-        self.send_button.configure(state="disabled")
         self._cancel_idle_callback()
         self._happy_until = 0.0
         self.set_state("thinking")
@@ -489,7 +484,9 @@ class DeboFace:
             else None,
         )
         future = self.executor.submit(self.robot.respond, message)
-        future.add_done_callback(lambda result, rid=request_id: self._collect_result(result, rid))
+        future.add_done_callback(
+            lambda result, rid=request_id: self._collect_result(result, rid)
+        )
 
     def _collect_result(self, future: Future[str], request_id: int) -> None:
         """Worker callback: queue results only; never call Tk from this thread."""
@@ -509,16 +506,53 @@ class DeboFace:
 
             if kind == "model_loading":
                 if not self.busy:
-                    self.status.configure(text="LOADING VOICE MODEL…", fg=self.current_accent())
-                    self.response_label.configure(text="Getting my ears ready… the first setup needs internet.")
+                    self.status.configure(text="LOADING SPEECH MODEL…", fg=self.current_accent())
+                    self.response_label.configure(text="Preparing my local ears…")
                 continue
 
             if kind == "model_ready":
                 if not self.busy:
-                    self.status.configure(text="LISTENING FOR HEY DEBO", fg=self.current_accent())
-                    self.response_label.configure(text="I'm here. Just say ‘Hey DEBO’ when you need me.")
+                    self.status.configure(text="WAITING FOR HEY DEBO", fg=self.current_accent())
+                    self.response_label.configure(text="I'm ready. Say “Hey DEBO” when you need me.")
                     if self.state == "error":
                         self.set_state("idle")
+                    self.status.configure(text="WAITING FOR HEY DEBO", fg=self.current_accent())
+                continue
+
+            if kind == "speaking_start":
+                self._cancel_idle_callback()
+                if not self.busy:
+                    self.set_state("speaking")
+                    self.response_label.configure(text="Speaking…")
+                continue
+
+            if kind == "speaking_end":
+                if not self.busy:
+                    self.set_state("idle")
+                    self.status.configure(text="WAITING FOR HEY DEBO", fg=self.current_accent())
+                    self.response_label.configure(text="I'm here. Say “Hey DEBO” when you need me.")
+                continue
+
+            if kind == "model_error":
+                self.response = result
+                self.response_label.configure(text=f"Speech model unavailable: {result}")
+                self.set_state("error")
+                continue
+
+            if kind == "transcription_error":
+                self.response = result
+                self.response_label.configure(text=result)
+                if not self.busy:
+                    self.set_state("error")
+                    self.idle_callback = self.root.after(3500, self.return_to_idle)
+                continue
+
+            if kind == "tts_error":
+                self.response = result
+                self.response_label.configure(text=result)
+                if not self.busy:
+                    self.set_state("error")
+                    self.idle_callback = self.root.after(3500, self.return_to_idle)
                 continue
 
             if kind == "wake":
@@ -558,19 +592,12 @@ class DeboFace:
                         self.set_state("idle")
                     continue
                 self.busy = False
-                self.entry.configure(state="normal")
-                self.send_button.configure(state="normal")
-                self.entry.delete(0, "end")
-                self.entry.insert(0, transcript)
-                self.submit_message()
+                self.submit_message(transcript)
                 continue
 
             self.response = result
             self.response_label.configure(text=result)
             self.busy = False
-            self.entry.configure(state="normal")
-            self.send_button.configure(state="normal")
-            self.entry.focus_set()
             self._cancel_idle_callback()
             if kind == "error":
                 self._happy_until = 0.0
@@ -580,9 +607,11 @@ class DeboFace:
             else:
                 self.set_state("happy")
                 self._happy_until = self.time + 1.0 / self._speed()
-                self.sound.play("success")
                 if self.settings["spoken_responses"]:
+                    # Do not overlap the success chirp with TTS; both use the speaker.
                     self.voice.speak_async(result)
+                else:
+                    self.sound.play("success")
                 # The callback is a fallback; the animation clock owns the happy hold.
                 self.idle_callback = self.root.after(5200, self.return_to_idle)
 
