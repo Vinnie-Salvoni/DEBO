@@ -7,7 +7,10 @@ authors = [
     { name = "Vinnie Salvoni", email = "ID+Vinnie-Salvoni@users.noreply.github.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "feedparser>=6.0.14",
+    "requests>=2.34.2",
+]
 
 [project.scripts]
 desk-robot = "desk_robot:main"

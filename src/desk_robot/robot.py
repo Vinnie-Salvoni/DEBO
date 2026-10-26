@@ -1,6 +1,13 @@
 from dataclasses import dataclass
 
 from desk_robot.context import ConversationContext
+from desk_robot.information import (
+    InformationError,
+    NewsProvider,
+    OpenMeteoWeatherProvider,
+    RssNewsProvider,
+    WeatherProvider,
+)
 from desk_robot.personality import Personality
 
 
@@ -16,10 +23,20 @@ class DeskRobot:
         self,
         name: str = "Debo",
         context_limit: int = 5,
+        weather_provider: WeatherProvider | None = None,
+        news_provider: NewsProvider | None = None,
     ) -> None:
         self.state = RobotState(name=name)
         self.personality = Personality()
         self.context = ConversationContext(max_turns=context_limit)
+        self.weather_provider = (
+            weather_provider
+            if weather_provider is not None
+            else OpenMeteoWeatherProvider()
+        )
+        self.news_provider = (
+            news_provider if news_provider is not None else RssNewsProvider()
+        )
 
     def respond(self, message: str) -> str:
         original_message = message.strip()
@@ -29,9 +46,9 @@ class DeskRobot:
             return "I'm listening... say something!"
 
         self.state.turns += 1
-
-        # Capture the previous message before recording this question.
         previous_message = self.context.last_user_message
+
+        intent = "unknown"
 
         if normalised in {"hello", "hi", "hey", "hello robot"}:
             intent = "greeting"
@@ -51,15 +68,89 @@ class DeskRobot:
             intent = "recall"
         elif "help" in normalised:
             intent = "help"
-        else:
-            intent = "unknown"
+        elif self._is_weather_request(normalised):
+            intent = "weather"
+        elif self._is_news_request(normalised):
+            intent = "news"
 
-        response = self.personality.respond(
-            intent=intent,
-            name=self.state.name,
-            mood=self.state.mood,
-            previous_message=previous_message,
-        )
+        if intent == "weather":
+            location = self._weather_location(original_message)
+
+            if not location:
+                response = (
+                    "Which location would you like the weather for? "
+                    "For example, weather in London."
+                )
+            else:
+                try:
+                    report = self.weather_provider.fetch_current(location)
+                    response = (
+                        f"Here's the current weather for {report.location}: "
+                        f"{report.condition}, {report.temperature_c:.1f}°C. "
+                        f"Source: {report.provider}."
+                    )
+                    if report.observed_at is not None:
+                        response += (
+                            " Conditions observed at "
+                            f"{report.observed_at.strftime('%H:%M UTC')}."
+                        )
+                except InformationError as error:
+                    response = str(error)
+
+        elif intent == "news":
+            try:
+                report = self.news_provider.fetch_latest(limit=5)
+                lines = [f"Here are the latest headlines from {report.provider}:"]
+                for index, article in enumerate(report.articles, start=1):
+                    lines.append(f"{index}. {article.title} — {article.url}")
+                response = "\n".join(lines)
+            except InformationError as error:
+                response = str(error)
+
+        else:
+            response = self.personality.respond(
+                intent=intent,
+                name=self.state.name,
+                mood=self.state.mood,
+                previous_message=previous_message,
+            )
 
         self.context.add_turn(original_message, response)
         return response
+
+    @staticmethod
+    def _is_weather_request(message: str) -> bool:
+        return any(word in message for word in ("weather", "temperature", "forecast"))
+
+    @staticmethod
+    def _is_news_request(message: str) -> bool:
+        return any(
+            phrase in message
+            for phrase in (
+                "news",
+                "headlines",
+                "latest stories",
+                "what's happening",
+                "what is happening",
+            )
+        )
+
+    @staticmethod
+    def _weather_location(message: str) -> str | None:
+        normalised = message.lower()
+        markers = (
+            "weather in ",
+            "weather for ",
+            "temperature in ",
+            "temperature for ",
+            "forecast in ",
+            "forecast for ",
+        )
+
+        for marker in markers:
+            position = normalised.find(marker)
+            if position >= 0:
+                location = message[position + len(marker) :].strip(" .?!")
+                return location or None
+
+        return None

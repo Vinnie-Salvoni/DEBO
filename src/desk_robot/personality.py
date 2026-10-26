@@ -2,13 +2,16 @@ from collections import defaultdict
 
 
 class Personality:
-    """Defines DEBO's personality and deterministic response variations."""
+    """Defines DEBO's personality and predictable response variations."""
 
     def __init__(self) -> None:
         self._response_indices: dict[str, int] = defaultdict(int)
 
     def _choose(self, category: str, responses: tuple[str, ...]) -> str:
-        """Cycle through responses predictably instead of choosing randomly."""
+        """Cycle through responses predictably."""
+        if not responses:
+            return "I'm not sure what to say."
+
         index = self._response_indices[category]
         self._response_indices[category] += 1
         return responses[index % len(responses)]
@@ -20,7 +23,7 @@ class Personality:
         mood: str,
         previous_message: str | None = None,
     ) -> str:
-        """Return a personality-driven response to a recognised intent."""
+        """Return a personality-driven response."""
 
         if intent == "greeting":
             return self._choose(
@@ -75,13 +78,16 @@ class Personality:
         if intent == "help":
             return (
                 "You can say hello, ask my name, ask how I am, "
+                "ask for the weather or latest news, recall your last message, "
                 "thank me, or tell me about your day. "
                 "I'm still learning, so feel free to experiment!"
             )
+
         if intent == "recall":
             if previous_message is None:
                 return "I don't have an earlier message to recall yet."
             return f'You said: "{previous_message}"'
+
         return self._choose(
             "unknown",
             (
@@ -89,6 +95,7 @@ class Personality:
                 "I'm still learning how to understand the world.",
                 "Hmm, I haven't quite figured that one out yet. "
                 "Can you tell me a little more?",
-                "That's got me curious! I don't know enough to answer just yet, but I'd like to hear more.",
+                "That's got me curious! I don't know enough to answer just yet, "
+                "but I'd like to hear more.",
             ),
         )
