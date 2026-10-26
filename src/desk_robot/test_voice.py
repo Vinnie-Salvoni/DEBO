@@ -45,7 +45,7 @@ def test_normalise_cleans_transcript_spacing() -> None:
 def test_audio_callback_discards_audio_while_tts_is_active() -> None:
     voice = VoiceController()
     voice._speaking.set()
-    voice._audio_callback(b"audio", 1, None, None)
+    voice._audio_callback(SimpleNamespace(tobytes=lambda: b"audio"), 1, None, None)
     assert voice._audio_queue.empty()
 
 
