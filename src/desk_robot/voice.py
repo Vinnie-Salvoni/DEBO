@@ -59,6 +59,9 @@ class VoiceController:
 
         self._speech_queue: queue.Queue[str | None] = queue.Queue()
         self._speech_thread: threading.Thread | None = None
+        self._speaking = threading.Event()
+        self._speech_state_lock = threading.Lock()
+        self._speech_pending = 0
 
     @property
     def listening(self) -> bool:
@@ -128,7 +131,7 @@ class VoiceController:
             self._emit("model_ready", "Listening for Hey DEBO")
         except VoiceError as error:
             self._model_error = str(error)
-            self._emit("voice_error", self._model_error)
+            self._emit("model_error", self._model_error)
 
     def _emit(self, event: str, text: str = "") -> None:
         """Send an event to the GUI without touching GUI widgets here."""
@@ -143,7 +146,7 @@ class VoiceController:
         self, indata, _frames, _time_info, _status
     ) -> None:
         """Called by sounddevice for each microphone audio block."""
-        if self._closed:
+        if self._closed or self._speaking.is_set() or not self._model_ready.is_set():
             return
 
         try:
@@ -177,6 +180,8 @@ class VoiceController:
         pre_roll: list[bytes] = []
         speech_started = False
         silence_frames = 0
+        was_speaking = False
+        resume_quiet_frames = 0
 
         frame_count = max(
             1, round(SILENCE_SECONDS / FRAME_SECONDS)
@@ -192,6 +197,13 @@ class VoiceController:
             try:
                 chunk = self._audio_queue.get(timeout=0.2)
             except queue.Empty:
+                if self._speaking.is_set():
+                    frames = []
+                    pre_roll = []
+                    speech_started = False
+                    silence_frames = 0
+                    was_speaking = True
+                    resume_quiet_frames = 3
                 if (
                     self._wake_until
                     and time.monotonic() > self._wake_until
@@ -202,6 +214,26 @@ class VoiceController:
 
             if chunk is None:
                 break
+
+            if self._speaking.is_set():
+                frames = []
+                pre_roll = []
+                speech_started = False
+                silence_frames = 0
+                was_speaking = True
+                resume_quiet_frames = 3
+                continue
+
+            if was_speaking:
+                # Wait for real microphone silence after playback; do not
+                # feed the speaker's acoustic tail into wake-word recognition.
+                if self._rms(chunk) < ENERGY_THRESHOLD:
+                    resume_quiet_frames -= 1
+                else:
+                    continue
+                if resume_quiet_frames > 0:
+                    continue
+                was_speaking = False
 
             if (
                 self._wake_until
@@ -267,13 +299,12 @@ class VoiceController:
             transcript = self._transcribe_file(path)
 
         except VoiceError as error:
-            self._emit("voice_error", str(error))
+            self._emit("transcription_error", str(error))
             return
-        except Exception:
+        except Exception as error:
             self._emit(
-                "voice_error",
-                "I had trouble processing that audio. "
-                "I'm still listening for 'Hey DEBO'.",
+                "transcription_error",
+                f"Audio transcription failed ({type(error).__name__}): {error}",
             )
             return
         finally:
@@ -338,9 +369,8 @@ class VoiceController:
             raise
         except Exception as error:
             raise VoiceError(
-                "I couldn't run local speech recognition. "
-                "The first model download needs internet; after that, "
-                "recognition runs on this computer."
+                "Speech transcription failed after the local model loaded "
+                f"({type(error).__name__}): {error}"
             ) from error
 
     def _get_model(self):
@@ -363,56 +393,55 @@ class VoiceController:
                     )
                 except Exception as error:
                     raise VoiceError(
-                        "I couldn't load DEBO's local speech model. "
-                        "Its first download needs internet."
+                        f"Could not load local speech model '{DEFAULT_MODEL}' "
+                        f"({type(error).__name__}): {error}. Check the model cache "
+                        "or network access if this is the first run."
                     ) from error
 
             return self._model
 
-    def speak_async(self, text: str) -> None:
-        """Queue spoken output without blocking the GUI."""
-        cleaned = re.sub(r"https?://\S+", "", str(text))
-        cleaned = " ".join(cleaned.split())
+    def _drain_audio_queue(self) -> None:
+        """Discard microphone blocks captured before recognition resumes."""
+        while True:
+            try:
+                self._audio_queue.get_nowait()
+            except queue.Empty:
+                return
 
-        if (
-            not cleaned
-            or not self.spoken_responses
-            or self._closed
-        ):
+    def speak_async(self, text: str) -> None:
+        """Queue speech and suspend recognition until playback has finished."""
+        cleaned = re.sub(r"https?://\\S+", "", str(text))
+        cleaned = " ".join(cleaned.split())
+        if not cleaned or not self.spoken_responses or self._closed:
             return
 
-        if (
-            self._speech_thread is None
-            or not self._speech_thread.is_alive()
-        ):
-            self._speech_thread = threading.Thread(
-                target=self._speech_loop,
-                name="debo-speech-output",
-                daemon=True,
-            )
-            self._speech_thread.start()
+        with self._speech_state_lock:
+            if self._speech_pending == 0:
+                self._speaking.set()
+                self._drain_audio_queue()
+                self._emit("speaking_start", "")
+            self._speech_pending += 1
+            if self._speech_thread is None or not self._speech_thread.is_alive():
+                self._speech_thread = threading.Thread(
+                    target=self._speech_loop,
+                    name="debo-speech-output",
+                    daemon=True,
+                )
+                self._speech_thread.start()
+            self._speech_queue.put(cleaned)
 
-        self._speech_queue.put(cleaned)
+    def _finish_speech_item(self) -> None:
+        with self._speech_state_lock:
+            self._speech_pending = max(0, self._speech_pending - 1)
+            if self._speech_pending == 0:
+                # Keep capture muted while stale blocks are removed.
+                self._drain_audio_queue()
+                self._speaking.clear()
+                self._emit("speaking_end", "")
 
     def _speech_loop(self) -> None:
-        """Speak queued responses using the installed system TTS voice."""
-        try:
-            import pyttsx3
-
-            engine = pyttsx3.init()
-            voices = engine.getProperty("voices") or []
-            selected = self._choose_robot_voice(voices)
-
-            if selected is not None:
-                engine.setProperty("voice", selected.id)
-
-            # This adjusts cadence, not the underlying voice's actual timbre.
-            engine.setProperty("rate", 148)
-            engine.setProperty("volume", 0.9)
-
-        except Exception:
-            return
-
+        """Own one pyttsx3 engine on one worker thread; recover per utterance."""
+        engine = None
         while not self._closed:
             try:
                 text = self._speech_queue.get(timeout=0.25)
@@ -420,18 +449,44 @@ class VoiceController:
                 continue
 
             if text is None:
+                self._speech_queue.task_done()
                 break
 
             try:
+                if engine is None:
+                    import pyttsx3
+
+                    engine = pyttsx3.init()
+                    voices = engine.getProperty("voices") or []
+                    selected = self._choose_robot_voice(voices)
+                    if selected is not None:
+                        engine.setProperty("voice", selected.id)
+                    engine.setProperty("rate", 142)
+                    engine.setProperty("volume", 0.9)
+
                 engine.say(self._robotic_delivery(text))
                 engine.runAndWait()
-            except Exception:
-                continue
+            except Exception as error:
+                self._emit(
+                    "tts_error",
+                    f"Speech playback failed ({type(error).__name__}): {error}",
+                )
+                if engine is not None:
+                    try:
+                        engine.stop()
+                    except Exception:
+                        pass
+                # Reinitialise on the next response instead of killing the worker.
+                engine = None
+            finally:
+                self._speech_queue.task_done()
+                self._finish_speech_item()
 
-        try:
-            engine.stop()
-        except Exception:
-            pass
+        if engine is not None:
+            try:
+                engine.stop()
+            except Exception:
+                pass
 
     @staticmethod
     def _choose_robot_voice(voices):
