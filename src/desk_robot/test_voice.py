@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import queue
 import sys
 import types
 from types import SimpleNamespace
 
-from desk_robot.voice import VoiceController
+from pathlib import Path
+
+import pytest
+
+from desk_robot.voice import VoiceController, VoiceError
 
 
 class FakeEngine:
@@ -106,3 +109,14 @@ def test_speaking_gate_discards_queued_microphone_audio() -> None:
     voice._speaking.set()
     voice._drain_audio_queue()
     assert voice._audio_queue.empty()
+
+def test_transcription_failure_is_not_misreported_as_model_download() -> None:
+    class BrokenModel:
+        def transcribe(self, *_args, **_kwargs):
+            raise RuntimeError("decoder failed")
+
+    voice = VoiceController()
+    voice._model = BrokenModel()
+
+    with pytest.raises(VoiceError, match="transcription failed after the local model loaded"):
+        voice._transcribe_file(Path("not-read-by-the-fake-model.wav"))
