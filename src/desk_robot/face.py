@@ -558,7 +558,7 @@ class DeboFace:
             "white": "#F2F7FF", "gold": "#FFC857",
         }
         colour_match = re.search(
-            r"(?:change|set|make) (?:my )?(?:eye colour|eye color|eyes|eye) (?:to )?(.+)$",
+            r"(?:change|set|make) (?:(?:my|the) )?(?:eye colour|eye color|eyes|eye) (?:to )?(.+)$",
             text,
         )
         if colour_match:
@@ -636,7 +636,7 @@ class DeboFace:
             elif "normal" in text:
                 speed = 1.0
             else:
-                match = re.search(r"(?:to )([0-9]+(?:\.[0-9]+)?)", text)
+                match = re.search(r"(?:to\\s+)?([0-9]+(?:\\.[0-9]+)?)", text)
                 if not match:
                     return "Say animation speed fast, normal, slow, or a number from 0.5 to 2."
                 speed = float(match.group(1))
@@ -949,7 +949,7 @@ class DeboFace:
             self.present_weather(weather)
         elif news is not None:
             self.present_news(news)
-        elif getattr(self.robot, "last_intent", "") in {"weather", "news", "next_news"}:
+        elif getattr(self.robot, "last_intent", "") in {"weather", "news", "next_news", "full_story"}:
             intent = self.robot.last_intent
             self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
             self.next_story_button.pack_forget()
