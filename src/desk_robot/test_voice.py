@@ -81,13 +81,14 @@ def test_combined_wake_and_command_emits_both_events(monkeypatch) -> None:
 
 
 
-def test_voice_controller_contains_input_only_no_speech_synthesis() -> None:
+def test_voice_input_remains_separate_from_speech_output() -> None:
     source = Path(__file__).with_name("voice.py").read_text(encoding="utf-8")
-
-    assert not hasattr(VoiceController, "speak_async")
-    assert "pyttsx3" not in source
-    assert "_speech_queue" not in source
-    assert "_play_robot_voice_file" not in source
+    speech_source = Path(__file__).with_name("speech.py").read_text(encoding="utf-8")
     sound_source = Path(__file__).with_name("sound.py").read_text(encoding="utf-8")
+
+    assert "pyttsx3" not in source
+    assert "def pause(" in source
+    assert "def resume(" in source
+    assert "class SpeechSynthesizer" in speech_source
+    assert "pyttsx3" in speech_source
     assert "def speak(" not in sound_source
-    assert "text-to-speech" not in sound_source.lower()
