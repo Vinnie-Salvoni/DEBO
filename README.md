@@ -1,67 +1,99 @@
 # DEBO — expressive desktop robot companion
 
-DEBO is a Python/Tkinter desktop companion with a responsive, morphing face, local wake-word speech recognition, character sound effects, text-to-speech, live weather, and RSS news. The design goal is an original little robot personality: quick expressions, playful electronic chirps, and spoken responses.
+DEBO is a software-first desk robot project. The current prototype runs on a desktop computer and combines an original, animated Cozmo/Vector-inspired face, deterministic personality, local wake-word speech recognition, speech synthesis, electronic sound effects, and live weather/news tools.
 
-## Requirements
+The long-term plan is to build the brain first, then a reliable stationary physical companion, and add movement only much later. The current code is a desktop prototype; it does not control physical robot hardware.
 
-- Python 3.14 or newer (matches `pyproject.toml`).
-- `uv` for dependency and environment management.
-- A microphone for wake-word interaction; local speech recognition downloads/loads the `base.en` model on first run.
-- Internet access for live weather, news headlines, and article reading.
-- Windows is the primary audio target. DEBO uses installed system voices through `pyttsx3`; on Windows, generated speech is subtly modulated for a more electronic timbre.
+## Current architecture
 
-## Install and run on Windows
+```text
+src/desk_robot/
+├── __main__.py              # Application entry point
+├── config.py                # Validated brain settings
+├── core/                    # Capability state and semantic events
+├── interfaces/              # Input and output contracts
+├── robot.py                 # Deterministic interaction and intent handling
+├── personality.py           # Character voice and reactions
+├── context.py               # Bounded session-only conversation context
+├── information.py           # Weather/news models and provider adapters
+├── face.py                  # Tkinter face, animation, and desktop UI
+├── voice.py                 # Local microphone and wake-word recognition
+├── speech.py                # Operating-system speech output
+└── sound.py                 # Original electronic sound effects
+
+tests/unit/                  # Hardware-independent automated tests
+```
+
+This is an incremental separation, not a claim that every interface is already wired into every subsystem. The face remains the current desktop renderer; new brain primitives are intended to let future changes separate behaviour from rendering without breaking the working prototype.
+
+## Requirements and setup
+
+- Python 3.14 or newer; `uv` manages dependencies and the environment.
+- A microphone for wake-word interaction; local recognition loads the `base.en` model on first run.
+- Internet access for live weather, headlines, and article reading.
+- Windows is the primary audio target. Speech uses an installed system voice; no cloud TTS account is required.
 
 From the repository directory in PowerShell:
 
 ```powershell
-uv lock
 uv sync --all-groups
 uv run python -m desk_robot.face
 ```
 
-The first run may take longer while faster-whisper downloads its local recognition model. DEBO will still launch without microphone access, but wake-word input will report an unavailable state. The voice uses a locally installed system voice; no cloud TTS account is required.
+The first run may take longer while faster-whisper downloads its model. DEBO can launch without microphone access; wake-word input will report an unavailable state, and the visual interface remains usable.
 
 ## Voice commands
 
 Say **“Hey DEBO”**, then give a command. You can combine the wake phrase and command in one utterance.
 
-- “Weather in London” — current conditions and today's high/low when available. DEBO reads the result aloud when speech is enabled.
-- “Show me the news” — presents the current headline and cycles through the full headline ticker automatically.
-- “Next story” — selects the next headline.
-- “Read the full story” — fetches and reads the currently selected article, when the publisher allows its text to be extracted.
-- “Change my eye colour to blue” — also supports teal, light blue, purple, pink, green, lime, red, orange, yellow, white, and gold.
-- “Eye glow high” / “eye glow low” / “eye glow 65”.
-- “Animation speed fast”, “animation speed normal”, “animation speed slow”, or “animation speed 1.5”.
-- “Automatic accents off” / “automatic accents on”.
-- “Turn sound off” / “turn sound on”.
-- “Turn speech off” / “turn speech on”.
-- “Speech volume 70”, “speech rate 170”, or “sound volume 40”.
-- “Settings” — gives examples of spoken preference commands.
-- “What did I just say?” — recalls the previous user message.
-- “Help” — lists supported interaction hints.
+- “Weather in London” — current conditions and today's high/low when available.
+- “Show me the news”, “Next story”, or “Read the full story”.
+- “Change my eye colour to blue”; other supported colours are available through the settings dialog.
+- “Eye glow high”, “eye glow low”, or “eye glow 65”.
+- “Animation speed fast”, “normal”, or “slow”.
+- “Turn sound off/on”, “turn speech off/on”, or “Settings”.
+- “What did I just say?” or “Help”.
 
-Speech pauses microphone capture while playing, then resumes wake-word detection, to avoid DEBO hearing its own voice. You can turn speech off and continue using the visual interface.
+Speech pauses microphone capture during playback to avoid DEBO hearing its own voice. Speech can be disabled while keeping the visual interface.
 
-## Face and sound design
+## Brain configuration
 
-- Eye silhouettes are continuously interpolated, with shorter reaction morphs and interruptible blinks/gaze changes.
-- The ticker scrolls each headline separately; long headlines naturally remain visible longer because the scroll time depends on their rendered width.
-- Sound effects use layered harmonics, slight pitch bends and vibrato to produce richer electronic chirps instead of plain sine beeps.
-- Speech uses the installed English system voice plus restrained audio modulation. This is an original DEBO sound, not an exact reproduction of Vector or WALL-E.
-- Voice-controlled settings and the settings dialog both persist preferences in `~/.debo_face_settings.json`.
+Environment variables configure hardware-independent defaults; they contain no secrets.
+
+| Variable | Default | Allowed values |
+|---|---:|---|
+| `DEBO_NAME` | `DEBO` | 1–40 characters |
+| `DEBO_CONTEXT_TURNS` | `5` | Integer, 1–50 |
+| `DEBO_INFORMATION_TIMEOUT_SECONDS` | `8.0` | Number, 0.5–60 |
+| `DEBO_NEWS_RESULT_LIMIT` | `5` | Integer, 1–20 |
+| `DEBO_LAPTOP_BRIDGE_ENABLED` | `false` | true/false, 1/0, yes/no |
+
+Invalid values raise a clear configuration error. Existing face preferences remain in the separate local settings file until that subsystem is migrated. Provider credentials must never be committed or logged.
+
+## Information independence
+
+The current desktop prototype uses Open-Meteo for weather and RSS for news. Weather/news requests are handled by provider adapters, not invented by an AI model. Provider outages should be reported honestly.
+
+**Unfinished release requirement:** genuine weather and news must be retrieved over DEBO's own network connection while the development laptop is powered off and Ollama is unavailable. This has not yet been proven on target hardware. No final robot computer or laptop/Ollama bridge has been selected or implemented.
 
 ## Development checks
 
 ```powershell
-uv lock
 uv sync --all-groups
 uv run pytest
 uv run ruff check .
+uv run ruff format --check .
 ```
 
-The RSS feed currently defaults to BBC News UK. Article text extraction is best-effort: some publishers render content dynamically, require sign-in, or block automated requests. In those cases DEBO will explain that the full story could not be extracted instead of reading an unrelated page.
+The normal test suite should not require live provider endpoints, a microphone, or a physical robot.
 
-## Project status
+## Roadmap
 
-DEBO is still a desktop software prototype. It does not yet control physical robot hardware or movement. Test microphone permissions, system voice availability, speech playback, and live information retrieval on the target Windows machine.
+1. **Brain foundation:** configuration, capability state, semantic events, interfaces, tests, reliable startup.
+2. **Personality and interaction:** modular behaviour, bounded context, graceful fallbacks.
+3. **Information tools:** provider contracts, freshness, error handling, independent-internet acceptance tests.
+4. **Stationary prototype:** expressive face and selected input/output, still without movement.
+5. **Physical integration:** choose hardware from measured requirements; use Onshape for editable CAD.
+6. **Movement:** research and implement only after the stationary device is reliable.
+
+Consult the project roadmap, technology decisions, and brain specification for the full requirements. Hardware, providers, network transport, display, and enclosure choices remain open until researched and tested.

@@ -1,7 +1,7 @@
 [project]
 name = "desk-robot"
 version = "0.1.0"
-description = "Add your description here"
+description = "DEBO: a modular, expressive desktop robot companion"
 readme = "README.md"
 authors = [
     { name = "Vinnie Salvoni", email = "ID+Vinnie-Salvoni@users.noreply.github.com" }
@@ -17,6 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
+debo = "desk_robot:main"
 desk-robot = "desk_robot:main"
 
 [build-system]
@@ -28,3 +29,10 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.2",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100

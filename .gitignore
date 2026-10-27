@@ -6,5 +6,16 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
-.venv
+# Virtual environments and tool caches
+.venv/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Local configuration, credentials, and generated state
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.token
