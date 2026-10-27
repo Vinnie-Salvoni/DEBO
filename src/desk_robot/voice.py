@@ -18,6 +18,18 @@ import threading
 import time
 import wave
 from pathlib import Path
+import difflib
+import logging
+
+logger = logging.getLogger(__name__)
+
+FRAME_SECONDS = 0.10
+SILENCE_SECONDS = 0.55
+MIN_SPEECH_SECONDS = 0.20
+MAX_SPEECH_SECONDS = 14.0
+WAKE_WINDOW_SECONDS = 8.0
+ENERGY_THRESHOLD = 100
+
 
 SAMPLE_RATE = 16_000
 CHANNELS = 1
@@ -328,11 +340,29 @@ class VoiceController:
 
         normalised = self._normalise(transcript)
 
-        wake = re.search(
-            r"\b(?:hey|hi|okay|ok|hello)\s+"
-            r"(?:there\s+)?(?:debo|deebo|deb[o0])\b",
-            normalised,
-        )
+        
+        wake = self._find_wake_phrase(normalised)
+
+        if wake is not None:
+            remainder = normalised[wake[1]:].strip(" ,.!?:;-")
+            self._wake_until = time.monotonic() + WAKE_WINDOW_SECONDS
+            self._emit("wake", transcript)
+
+            # Support "Hey DEBO, what's the weather?" in one sentence.
+            if remainder:
+                self._wake_until = 0.0
+                self._emit("transcript", remainder)
+
+            return
+
+        # If the wake phrase was spoken separately, accept the next utterance.
+        if (
+            self._wake_until
+            and time.monotonic() <= self._wake_until
+        ):
+            self._wake_until = 0.0
+            self._emit("transcript", transcript.strip())
+
 
         if wake:
             remainder = normalised[wake.end():].strip(
@@ -357,6 +387,39 @@ class VoiceController:
         ):
             self._wake_until = 0.0
             self._emit("transcript", transcript.strip())
+    
+    @staticmethod
+    def _find_wake_phrase(text: str) -> tuple[int, int] | None:
+        """Find a reasonably close spoken version of the DEBO wake phrase."""
+        normalised = VoiceController._normalise(text)
+        words = list(re.finditer(r"\b[\w']+\b", normalised))
+
+        greetings = {"hey", "hi", "okay", "ok", "hello"}
+        targets = ("debo", "deebo", "thebo", "deevo", "devo")
+
+        for index, word in enumerate(words):
+            if word.group() not in greetings:
+                continue
+
+            # Check a few following words because Whisper can split a name.
+            for end_index in range(index + 1, min(index + 4, len(words))):
+                candidate = " ".join(
+                    match.group()
+                    for match in words[index + 1:end_index + 1]
+                )
+
+                compact = candidate.replace(" ", "")
+                score = max(
+                    difflib.SequenceMatcher(
+                        None, compact, target
+                    ).ratio()
+                    for target in targets
+                )
+
+                if score >= 0.70:
+                    return word.start(), words[end_index].end()
+
+        return None
 
     @staticmethod
     def _normalise(text: str) -> str:
@@ -422,11 +485,11 @@ class VoiceController:
 
     def speak_async(self, text: str) -> None:
         """Queue speech and suspend recognition until playback has finished."""
-        cleaned = re.sub(r"https?://\\S+", "", str(text))
+        cleaned = re.sub(r"https?://\S+", "", str(text))
         cleaned = " ".join(cleaned.split())
         if not cleaned or not self.spoken_responses or self._closed:
             return
-
+        logger.info("Queueing TTS response (%d characters)", len(cleaned))
         with self._speech_state_lock:
             if self._speech_pending == 0:
                 self._speaking.set()
@@ -454,6 +517,7 @@ class VoiceController:
     def _speech_loop(self) -> None:
         """Own one pyttsx3 engine on one worker thread; recover per utterance."""
         engine = None
+        logger.info("TTS worker started")
         while not self._closed:
             try:
                 text = self._speech_queue.get(timeout=0.25)
@@ -467,7 +531,7 @@ class VoiceController:
             try:
                 if engine is None:
                     import pyttsx3
-
+                    logger.info("Initialising pyttsx3")
                     engine = pyttsx3.init()
                     voices = engine.getProperty("voices") or []
                     selected = self._choose_robot_voice(voices)
@@ -475,9 +539,10 @@ class VoiceController:
                         engine.setProperty("voice", selected.id)
                     engine.setProperty("rate", 142)
                     engine.setProperty("volume", 0.9)
-
+                logger.info("Starting speech playback")
                 engine.say(self._robotic_delivery(text))
                 engine.runAndWait()
+                logger.info("Speech playback completed")
             except Exception as error:
                 self._emit(
                     "tts_error",
@@ -495,6 +560,9 @@ class VoiceController:
                 self._finish_speech_item()
 
         if engine is not None:
+            logger.info(
+            "TTS worker received response (%d characters)", len(text)
+            )
             try:
                 engine.stop()
             except Exception:

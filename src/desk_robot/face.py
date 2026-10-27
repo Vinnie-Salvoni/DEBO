@@ -10,6 +10,7 @@ import json
 import math
 import queue
 import random
+import logging
 import tkinter as tk
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
@@ -286,7 +287,10 @@ def morph_shape(start: EyeShape, end: EyeShape, amount: float) -> EyeShape:
 
 class DeboFace:
     """Tkinter UI with a responsive background worker and morphable eye geometry."""
-
+    logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(threadName)s %(name)s: %(message)s",
+        )
     def __init__(self) -> None:
         self.settings = load_settings()
         self.robot = DeskRobot()
