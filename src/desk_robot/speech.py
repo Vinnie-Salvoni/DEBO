@@ -35,6 +35,9 @@ class SpeechSynthesizer:
     def set_volume(self, volume: float) -> None:
         self.volume = max(0.0, min(1.0, float(volume)))
 
+    def set_rate(self, rate: int) -> None:
+        self.rate = max(120, min(230, int(rate)))
+
     def speak(self, text: str) -> None:
         """Speak text synchronously; callers should use a dedicated worker thread."""
         text = " ".join(str(text).split())
