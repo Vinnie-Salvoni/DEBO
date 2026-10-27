@@ -455,6 +455,18 @@ def test_weather_location_can_be_changed_with_a_natural_follow_up() -> None:
     assert "Paris, UK" in second
 
 
+
+def test_weather_location_follow_up_expires_after_an_unrelated_topic() -> None:
+    robot = make_information_robot()
+    robot.respond("weather in London")
+
+    robot.respond("hello")
+    response = robot.respond("what about Paris?")
+
+    assert robot.last_intent == "unknown"
+    assert robot.last_weather_report is None
+    assert "Tell me more" in response
+
 def test_clearing_conversation_also_clears_weather_follow_up_context() -> None:
     robot = make_information_robot()
     robot.respond("weather in London")

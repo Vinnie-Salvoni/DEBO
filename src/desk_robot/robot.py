@@ -189,6 +189,11 @@ class DeskRobot:
         elif self.pending_intent == "weather" and intent != "weather":
             self.pending_intent = None
 
+        # A location comparison only makes sense as an immediate weather follow-up.
+        # Don't let an old weather topic hijack a later, unrelated conversation.
+        if intent != "weather":
+            self.last_weather_location = None
+
         self.last_intent = intent
         reaction = self.behaviour.observe(intent)
         self._emit_event(
