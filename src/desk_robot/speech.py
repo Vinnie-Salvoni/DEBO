@@ -6,9 +6,12 @@ robotic treatment, not a copy of any character voice.
 """
 from __future__ import annotations
 
+import logging
 import math
 import os
+import sys
 import tempfile
+import array
 import threading
 import wave
 from pathlib import Path
@@ -79,8 +82,8 @@ class SpeechSynthesizer:
         finally:
             try:
                 engine.stop()
-            except Exception:
-                pass
+            except (RuntimeError, OSError, AttributeError):
+                logging.getLogger(__name__).debug("Could not stop TTS engine", exc_info=True)
 
     @staticmethod
     def _select_english_voice(engine) -> None:
@@ -99,15 +102,12 @@ class SpeechSynthesizer:
                 if "english" in descriptor or "en-us" in descriptor or "en_us" in descriptor:
                     engine.setProperty("voice", voice.id)
                     return
-        except Exception:
-            pass
+        except (RuntimeError, OSError, AttributeError, TypeError):
+            logging.getLogger(__name__).debug("Could not select an English TTS voice", exc_info=True)
 
     @staticmethod
     def _robotise_wav(source: Path, destination: Path) -> None:
         """Apply restrained ring modulation and saturation while preserving speech."""
-        from array import array
-        import sys
-
         with wave.open(os.fspath(source), "rb") as reader:
             params = reader.getparams()
             raw = reader.readframes(reader.getnframes())
@@ -117,7 +117,7 @@ class SpeechSynthesizer:
                 writer.writeframes(raw)
             return
 
-        samples = array("h")
+        samples = array.array("h")
         samples.frombytes(raw)
         if sys.byteorder != "little":
             samples.byteswap()
