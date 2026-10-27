@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 from typing import Protocol
 
 import feedparser
@@ -103,6 +105,44 @@ def _weather_condition(code: int) -> str:
     if code in {96, 99}:
         return "Thunderstorm with hail"
     return "Conditions unavailable"
+
+
+class _ArticleTextParser(HTMLParser):
+    """Extract readable paragraph text without a heavyweight scraping dependency."""
+
+    _ignored_tags = {"script", "style", "nav", "footer", "header", "aside", "form"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._ignored_depth = 0
+        self._paragraph_depth = 0
+        self._current: list[str] = []
+        self.paragraphs: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag in self._ignored_tags:
+            self._ignored_depth += 1
+        if tag == "p" and self._ignored_depth == 0:
+            self._paragraph_depth += 1
+            if self._paragraph_depth == 1:
+                self._current = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._ignored_tags:
+            self._ignored_depth = max(0, self._ignored_depth - 1)
+        if tag == "p" and self._paragraph_depth:
+            self._paragraph_depth -= 1
+            if self._paragraph_depth == 0:
+                paragraph = " ".join(" ".join(self._current).split())
+                if len(paragraph) > 35:
+                    self.paragraphs.append(paragraph)
+                self._current = []
+
+    def handle_data(self, data: str) -> None:
+        if self._paragraph_depth and not self._ignored_depth:
+            cleaned = data.strip()
+            if cleaned:
+                self._current.append(cleaned)
 
 
 class OpenMeteoWeatherProvider:
@@ -270,3 +310,38 @@ class RssNewsProvider:
             raise InformationError(
                 "I couldn't retrieve the news just now. Please try again."
             ) from error
+
+    def fetch_story(self, article: NewsArticle) -> str:
+        """Retrieve the full readable article text for a selected headline."""
+        parsed_url = urlparse(article.url)
+        if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+            raise InformationError("That story link is not a valid web address.")
+        try:
+            response = requests.get(
+                article.url,
+                headers={"User-Agent": "DEBO-Desk-Companion/0.1 (article reader)"},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            parser = _ArticleTextParser()
+            parser.feed(response.text)
+            paragraphs = []
+            seen = set()
+            for paragraph in parser.paragraphs:
+                normalised = paragraph.casefold()
+                if normalised not in seen:
+                    seen.add(normalised)
+                    paragraphs.append(paragraph)
+            story = "\n\n".join(paragraphs)
+            if len(story) < 180:
+                raise InformationError(
+                    "I couldn't extract the full story from that page. The publisher may block article reading."
+                )
+            return story[:40000]
+        except InformationError:
+            raise
+        except requests.RequestException as error:
+            raise InformationError(
+                "I couldn't download that story just now. Please try again."
+            ) from error
+
