@@ -3,9 +3,9 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from desk_robot.behaviour import BehaviourEngine
 from desk_robot.config import BrainConfig
 from desk_robot.context import ConversationContext
-from desk_robot.behaviour import BehaviourEngine
 from desk_robot.core.capabilities import Capability, CapabilityRegistry, CapabilityStatus
 from desk_robot.core.events import RobotEvent, RobotEventType
 from desk_robot.information import (
