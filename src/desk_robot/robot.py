@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from desk_robot.context import ConversationContext
+from desk_robot.core.capabilities import Capability, CapabilityRegistry, CapabilityStatus
 from desk_robot.information import (
     InformationError,
     NewsProvider,
@@ -27,6 +28,7 @@ class DeskRobot:
         news_provider: NewsProvider | None = None,
     ) -> None:
         self.state = RobotState(name=name)
+        self.capabilities = CapabilityRegistry()
         self.personality = Personality()
         self.context = ConversationContext(max_turns=context_limit)
         self.weather_provider = (
@@ -101,6 +103,7 @@ class DeskRobot:
                 try:
                     report = self.weather_provider.fetch_current(location)
                     self.last_weather_report = report
+                    self.capabilities.set_status(Capability.WEATHER, CapabilityStatus.AVAILABLE)
                     response = (
                         f"Here's the current weather for {report.location}: "
                         f"{report.condition}, {report.temperature_c:.1f}°C. "
@@ -112,12 +115,20 @@ class DeskRobot:
                             f"{report.observed_at.strftime('%H:%M UTC')}."
                         )
                 except InformationError as error:
+                    self.capabilities.set_status(
+                        Capability.WEATHER, CapabilityStatus.UNAVAILABLE, detail=str(error)
+                    )
                     response = str(error)
 
         elif intent == "news":
             try:
                 report = self.news_provider.fetch_latest(limit=5)
                 self.last_news_report = report
+                self.capabilities.set_status(
+                    Capability.NEWS,
+                    CapabilityStatus.AVAILABLE if report.articles else CapabilityStatus.UNAVAILABLE,
+                    detail=None if report.articles else "The news feed returned no headlines.",
+                )
                 self.news_cache = report
                 self.last_news_index = 0
                 if report.articles:
@@ -125,6 +136,9 @@ class DeskRobot:
                 else:
                     response = "The news feed returned no headlines."
             except InformationError as error:
+                self.capabilities.set_status(
+                    Capability.NEWS, CapabilityStatus.UNAVAILABLE, detail=str(error)
+                )
                 response = str(error)
 
         elif intent == "full_story":
