@@ -724,6 +724,20 @@ class DeboFace:
             self.present_weather(weather)
         elif news is not None:
             self.present_news(news)
+        elif getattr(self.robot, "last_intent", "") in {"weather", "news", "next_news"}:
+            intent = self.robot.last_intent
+            self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
+            self.next_story_button.pack_forget()
+            if intent == "weather" and "which location" in self.response.lower():
+                self.info_title.configure(text="WEATHER  /  LOCATION NEEDED")
+                self.info_main.configure(text="Tell me a city or town, for example: “weather in London”.")
+                self.info_meta.configure(text="I'll fetch live conditions and today's high/low.")
+                self._set_ticker("WEATHER  •  CHOOSE A LOCATION")
+            else:
+                self.info_title.configure(text=f"{intent.replace('_', ' ').upper()}  /  UNAVAILABLE")
+                self.info_main.configure(text="I couldn't retrieve that information just now.")
+                self.info_meta.configure(text="Check your connection and try again. DEBO is still listening.")
+                self._set_ticker("LIVE INFORMATION UNAVAILABLE  •  PLEASE TRY AGAIN")
 
     def _cancel_idle_callback(self) -> None:
         if self.idle_callback is not None:
