@@ -154,7 +154,7 @@ class DeskRobot:
 
             if not location:
                 self.pending_intent = "weather"
-                response = "Where should I check? Tell me a city or town, and I'll get the weather."
+                response = "Which location should I check? Tell me a city or town, and I'll get the weather."
             else:
                 self.pending_intent = None
                 self._emit_event(
@@ -295,6 +295,7 @@ class DeskRobot:
             "temperature for ",
             "forecast in ",
             "forecast for ",
+            "umbrella in ",
         )
 
         for marker in markers:
