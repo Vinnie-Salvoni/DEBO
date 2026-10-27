@@ -15,7 +15,6 @@ from desk_robot.information import (
 )
 from desk_robot.personality import Personality
 
-
 logger = logging.getLogger(__name__)
 
 
