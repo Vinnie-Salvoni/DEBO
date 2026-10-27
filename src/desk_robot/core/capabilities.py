@@ -5,6 +5,7 @@ from enum import StrEnum
 from threading import RLock
 from time import time
 
+
 class Capability(StrEnum):
     """Abilities whose availability is tracked independently."""
     INTERNET = "internet"

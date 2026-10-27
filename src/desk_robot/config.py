@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+
 class ConfigurationError(ValueError):
     """A configured value cannot be used safely."""
 

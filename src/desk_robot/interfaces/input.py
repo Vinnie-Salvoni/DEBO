@@ -3,7 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Protocol
 
+
 InputHandler = Callable[[str], None]
+
 
 class InputSource(Protocol):
     def start(self, on_input: InputHandler) -> None:

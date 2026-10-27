@@ -1,10 +1,13 @@
 import pytest
+
 from desk_robot.config import BrainConfig, ConfigurationError
+
 
 def test_config_defaults(monkeypatch) -> None:
     for key in ("DEBO_NAME", "DEBO_CONTEXT_TURNS", "DEBO_INFORMATION_TIMEOUT_SECONDS", "DEBO_NEWS_RESULT_LIMIT", "DEBO_LAPTOP_BRIDGE_ENABLED"):
         monkeypatch.delenv(key, raising=False)
     assert BrainConfig.from_environment() == BrainConfig()
+
 
 @pytest.mark.parametrize(("name", "value"), [
     ("DEBO_CONTEXT_TURNS", "0"),

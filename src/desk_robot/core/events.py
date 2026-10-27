@@ -5,6 +5,7 @@ from enum import StrEnum
 from time import time
 from typing import Any
 
+
 class RobotEventType(StrEnum):
     STARTED = "started"
     USER_INPUT_RECEIVED = "user_input_received"

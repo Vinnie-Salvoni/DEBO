@@ -1,5 +1,6 @@
 from desk_robot.core.capabilities import Capability, CapabilityRegistry, CapabilityStatus
 
+
 def test_capabilities_are_independent() -> None:
     registry = CapabilityRegistry()
     assert registry.get(Capability.INTERNET).status is CapabilityStatus.UNKNOWN
@@ -16,6 +17,7 @@ def test_capability_snapshot_is_immutable_and_includes_all_capabilities() -> Non
     assert internet.detail == "direct device"
     assert internet.checked_at == 123.0
     assert len(snapshot) == len(Capability)
+
 
 def test_blank_detail_normalises_to_none() -> None:
     item = CapabilityRegistry().set_status(Capability.NEWS, CapabilityStatus.UNAVAILABLE, detail="   ")
