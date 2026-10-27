@@ -115,17 +115,23 @@ class _ArticleTextParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self._ignored_depth = 0
+        self._article_depth = 0
         self._paragraph_depth = 0
         self._current: list[str] = []
+        self._current_is_article = False
         self.paragraphs: list[str] = []
+        self.article_paragraphs: list[str] = []
 
     def handle_starttag(self, tag: str, attrs) -> None:
         if tag in self._ignored_tags:
             self._ignored_depth += 1
+        if tag == "article" and self._ignored_depth == 0:
+            self._article_depth += 1
         if tag == "p" and self._ignored_depth == 0:
             self._paragraph_depth += 1
             if self._paragraph_depth == 1:
                 self._current = []
+                self._current_is_article = self._article_depth > 0
 
     def handle_endtag(self, tag: str) -> None:
         if tag in self._ignored_tags:
@@ -136,7 +142,12 @@ class _ArticleTextParser(HTMLParser):
                 paragraph = " ".join(" ".join(self._current).split())
                 if len(paragraph) > 35:
                     self.paragraphs.append(paragraph)
+                    if self._current_is_article:
+                        self.article_paragraphs.append(paragraph)
                 self._current = []
+                self._current_is_article = False
+        if tag == "article":
+            self._article_depth = max(0, self._article_depth - 1)
 
     def handle_data(self, data: str) -> None:
         if self._paragraph_depth and not self._ignored_depth:
@@ -327,7 +338,8 @@ class RssNewsProvider:
             parser.feed(response.text)
             paragraphs = []
             seen = set()
-            for paragraph in parser.paragraphs:
+            source_paragraphs = parser.article_paragraphs or parser.paragraphs
+            for paragraph in source_paragraphs:
                 normalised = paragraph.casefold()
                 if normalised not in seen:
                     seen.add(normalised)
@@ -337,7 +349,7 @@ class RssNewsProvider:
                 raise InformationError(
                     "I couldn't extract the full story from that page. The publisher may block article reading."
                 )
-            return story[:40000]
+            return story
         except InformationError:
             raise
         except requests.RequestException as error:
