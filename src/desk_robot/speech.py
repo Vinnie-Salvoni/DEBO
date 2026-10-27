@@ -94,7 +94,8 @@ class SpeechSynthesizer:
     @staticmethod
     def _robotise_wav(source: Path, destination: Path) -> None:
         """Apply restrained ring modulation and saturation while preserving speech."""
-        import struct
+        from array import array
+        import sys
 
         with wave.open(os.fspath(source), "rb") as reader:
             params = reader.getparams()
@@ -105,19 +106,22 @@ class SpeechSynthesizer:
                 writer.writeframes(raw)
             return
 
-        samples = struct.unpack("<" + "h" * (len(raw) // 2), raw)
-        output: list[int] = []
+        samples = array("h")
+        samples.frombytes(raw)
+        if sys.byteorder != "little":
+            samples.byteswap()
         rate = params.framerate
         for index, sample in enumerate(samples):
             time_seconds = (index // params.nchannels) / max(1, rate)
             carrier = 0.86 + 0.14 * math.sin(2.0 * math.pi * 34.0 * time_seconds)
             value = sample * carrier
             # A tiny soft clip rounds harsh peaks without making speech unintelligible.
-            value = 32767.0 * math.tanh(value / 39000.0)
-            output.append(max(-32768, min(32767, int(value))))
+            samples[index] = max(-32768, min(32767, int(32767.0 * math.tanh(value / 39000.0))))
+        if sys.byteorder != "little":
+            samples.byteswap()
         with wave.open(os.fspath(destination), "wb") as writer:
             writer.setparams(params)
-            writer.writeframes(struct.pack("<" + "h" * len(output), *output))
+            writer.writeframes(samples.tobytes())
 
     def close(self) -> None:
         self._closed = True
