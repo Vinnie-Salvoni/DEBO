@@ -139,7 +139,7 @@ class DeskRobot:
                     response = "This news source doesn't support full-story reading yet."
                 else:
                     try:
-                        self.last_story_text = fetch_story(article)
+                        self.last_story_text = f"{article.title}. {fetch_story(article)}"
                         response = f"All right. I'll read the full story: {article.title}."
                     except InformationError as error:
                         response = str(error)
