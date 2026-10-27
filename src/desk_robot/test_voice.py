@@ -92,3 +92,20 @@ def test_voice_input_remains_separate_from_speech_output() -> None:
     assert "class SpeechSynthesizer" in speech_source
     assert "pyttsx3" in speech_source
     assert "def speak(" not in sound_source
+
+
+
+def test_microphone_pause_suppresses_playback_audio_and_resume_restores_input() -> None:
+    class AudioFrame:
+        def tobytes(self) -> bytes:
+            return b"\\x01\\x00" * 8
+
+    voice = VoiceController()
+    voice._model_ready.set()
+    voice.pause()
+    voice._audio_callback(AudioFrame(), 8, None, None)
+    assert voice._audio_queue.empty()
+
+    voice.resume()
+    voice._audio_callback(AudioFrame(), 8, None, None)
+    assert voice._audio_queue.get_nowait() == b"\\x01\\x00" * 8
