@@ -1,7 +1,7 @@
 """Hands-free local wake-word voice input for DEBO.
 
-This module owns microphone capture and speech recognition only. DEBO's
-responses are visual; no speech synthesis or audio playback pipeline exists.
+This module owns microphone capture and recognition. Speech synthesis lives
+in a separate worker-backed module so listening and playback remain isolated.
 """
 from __future__ import annotations
 
