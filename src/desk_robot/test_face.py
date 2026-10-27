@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from desk_robot.face import (
+    DEFAULT_SETTINGS,
     EXPRESSION_ALIASES,
     EXPRESSION_PRESETS,
-    DEFAULT_SETTINGS,
     DeboFace,
     EyeShape,
     morph_shape,
