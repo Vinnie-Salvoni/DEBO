@@ -343,11 +343,11 @@ def test_behaviour_state_evolves_with_interactions_and_stays_bounded() -> None:
     initial_familiarity = robot.behaviour.familiarity
 
     robot.respond("hello")
-    first = robot.behaviour
+    first_interactions = robot.behaviour.interactions
     robot.respond("tell me something interesting")
     second = robot.behaviour
 
-    assert first.interactions == 1
+    assert first_interactions == 1
     assert second.interactions == 2
     assert second.familiarity > initial_familiarity
     assert 0.0 <= second.curiosity <= 1.0
