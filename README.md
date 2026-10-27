@@ -58,7 +58,6 @@ uv lock
 uv sync --all-groups
 uv run pytest
 uv run ruff check .
-uv run ruff format --check .
 ```
 
 The RSS feed currently defaults to BBC News UK. Article text extraction is best-effort: some publishers render content dynamically, require sign-in, or block automated requests. In those cases DEBO will explain that the full story could not be extracted instead of reading an unrelated page.
