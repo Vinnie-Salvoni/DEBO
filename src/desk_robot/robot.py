@@ -150,6 +150,8 @@ class DeskRobot:
                 intent = "weather"
             else:
                 self.pending_intent = None
+        elif self.pending_intent == "weather" and intent != "weather":
+            self.pending_intent = None
 
         self.last_intent = intent
 
