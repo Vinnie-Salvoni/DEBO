@@ -193,6 +193,9 @@ class FakeNewsProvider:
         )
         return NewsReport("Example RSS", datetime.now(UTC), articles[:limit])
 
+    def fetch_story(self, article: NewsArticle) -> str:
+        return f"Full story text for {article.title}. " + ("More reporting and detail. " * 20)
+
 
 def make_information_robot(*, news_fail: bool = False) -> DeskRobot:
     return DeskRobot(
@@ -250,3 +253,17 @@ def test_news_provider_failure_is_recoverable() -> None:
 
     assert "unavailable" in response.lower()
     assert robot.last_news_report is None
+
+
+
+def test_full_story_request_reads_the_currently_selected_article() -> None:
+    robot = make_information_robot()
+    robot.respond("show me the news")
+    robot.respond("next story")
+
+    response = robot.respond("read the full story")
+
+    assert robot.last_intent == "full_story"
+    assert "Second real headline" in response
+    assert robot.last_story_text is not None
+    assert robot.last_story_text.startswith("Full story text for Second real headline")
