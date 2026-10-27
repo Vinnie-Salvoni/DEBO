@@ -259,7 +259,10 @@ EXPRESSION_PRESETS: dict[str, tuple[EyeShape, EyeShape]] = {
 # reference-sheet poses remain available through show_expression().
 EXPRESSION_ALIASES = {
     "idle": "neutral", "speaking": "neutral", "happy": "happy",
-    "glee": "glee", "sad": "sad_down", "skeptical": "skeptic",
+    "glee": "glee", "success": "glee", "pleased": "happy",
+    "curious": "awe", "interested": "awe", "waking": "surprised",
+    "confused": "skeptic", "sleeping": "sleepy", "weather": "focused",
+    "news": "focused", "sad": "sad_down", "skeptical": "skeptic",
     "focused/determined": "focused", "annoyed": "annoyed",
     "frustrated/bored": "frustrated", "unimpressed": "unimpressed",
     "sleepy eyes": "sleepy", "blink (high)": "blink_high",
@@ -655,6 +658,7 @@ class DeboFace:
         self._ticker_text = ""
 
     def show_information_loading(self, kind: str) -> None:
+        self.show_expression("curious", 0.24)
         self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
         self.next_story_button.pack_forget()
         self.info_title.configure(text=f"{kind.upper()}  /  CONNECTING")
