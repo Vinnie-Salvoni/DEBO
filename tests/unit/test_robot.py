@@ -490,3 +490,22 @@ def test_clearing_conversation_also_clears_weather_follow_up_context() -> None:
     response = robot.respond("what about Paris?")
     assert robot.last_intent == "unknown"
     assert "Tell me more" in response
+
+
+def test_robot_can_talk_about_itself_as_a_companion() -> None:
+    robot = DeskRobot()
+
+    response = robot.respond("tell me about yourself")
+
+    assert robot.last_intent == "about"
+    assert "Debo" in response
+    assert "companion" in response.lower() or "sidekick" in response.lower()
+
+
+def test_personality_varies_self_description_predictably() -> None:
+    personality = Personality()
+
+    first = personality.respond("about", "Debo", "curious")
+    second = personality.respond("about", "Debo", "curious")
+
+    assert first != second

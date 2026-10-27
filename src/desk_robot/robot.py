@@ -133,6 +133,14 @@ class DeskRobot:
             intent = "cancel"
         elif normalised in {"hello", "hi", "hey", "hello robot"}:
             intent = "greeting"
+        elif any(phrase in normalised for phrase in (
+            "tell me about yourself",
+            "what are you like",
+            "describe yourself",
+            "what do you like",
+            "what kind of robot are you",
+        )):
+            intent = "about"
         elif "your name" in normalised or "what is your name" in normalised:
             intent = "name"
         elif "how are you" in normalised:

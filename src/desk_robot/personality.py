@@ -35,6 +35,16 @@ class Personality:
                 ),
             )
 
+        if intent == "about":
+            return self._choose(
+                "about",
+                (
+                    f"I'm {name}, a curious little desk companion. I like learning what you're interested in and helping where I can.",
+                    f"Well, I'm {name}! Think of me as your desk-side sidekick: curious, chatty, and always up for exploring something new.",
+                    f"I'm {name} — still growing into my role, but I'd love to be the sort of companion you can talk to, ask questions, and share your day with.",
+                ),
+            )
+
         if intent == "name":
             return self._choose(
                 "name",
