@@ -532,6 +532,9 @@ class DeboFace:
 
     def _speak_text(self, text: str) -> None:
         """Speak away from Tk's UI thread and temporarily mute DEBO's own microphone."""
+        if self.closed:
+            return
+        self.results.put(("speech_start", "", -1))
         try:
             self.voice.pause()
             self.speech.speak(text)
@@ -539,6 +542,8 @@ class DeboFace:
             logging.getLogger(__name__).exception("DEBO speech playback failed")
         finally:
             self.voice.resume()
+            if not self.closed:
+                self.results.put(("speech_done", "", -1))
 
     def _handle_settings_command(self, message: str) -> str | None:
         """Apply common spoken preference commands without opening a settings dialog."""
@@ -781,6 +786,17 @@ class DeboFace:
                 if not self.busy:
                     self.set_state("error")
                     self.idle_callback = self.root.after(3500, self.return_to_idle)
+                continue
+
+            if kind == "speech_start":
+                self.set_state("speaking")
+                self.show_expression("speaking", 0.09)
+                continue
+
+            if kind == "speech_done":
+                if not self.busy:
+                    self.set_state("happy")
+                    self._happy_until = self.time + 0.55
                 continue
 
             if request_id != -1 and request_id != self._request_id:
@@ -1143,6 +1159,17 @@ class DeboFace:
             bob_offset = 0.0
 
         shapes = self._current_shapes()
+        if self.state == "speaking":
+            # A tiny, irregular eye-height pulse makes speech feel physically embodied.
+            pulse = 0.022 * math.sin(self.time * 17.0) + 0.008 * math.sin(self.time * 7.3)
+            shapes = tuple(
+                EyeShape(**{
+                    **shape.__dict__,
+                    "height": max(0.035, shape.height * (1.0 + pulse)),
+                    "y": shape.y + pulse * 0.35,
+                })
+                for shape in shapes
+            )
         eye_width, eye_height = 128 * scale, 112 * scale
         gap = 44 * scale
         eye_color = self.display_eye_color
