@@ -50,10 +50,11 @@ Say **“Hey DEBO”**, then give a command. You can combine the wake phrase and
 
 - “Weather in London” — current conditions and today's high/low when available.
 - “Show me the news”, “Next story”, or “Read the full story”.
-- “Change my eye colour to blue”; other supported colours are available through the settings dialog.
+- “Change my eye colour to blue” or another supported colour; appearance preferences are voice-only.
 - “Eye glow high”, “eye glow low”, or “eye glow 65”.
 - “Animation speed fast”, “normal”, or “slow”.
-- “Turn sound off/on”, “turn speech off/on”, or “Settings”.
+- “Turn sound off/on”, “turn speech off/on”, “speech volume 70”, or “Settings” for spoken help.
+- “Next story” and “read the full story” navigate news by voice. DEBO has no in-app keyboard or mouse controls.
 - “What did I just say?” or “Help”.
 
 Speech pauses microphone capture during playback to avoid DEBO hearing its own voice. Speech can be disabled while keeping the visual interface.
@@ -74,7 +75,7 @@ Invalid values raise a clear configuration error. Existing face preferences rema
 
 ## Information independence
 
-The current desktop prototype uses Open-Meteo for weather and RSS for news. Weather/news requests are handled by provider adapters, not invented by an AI model. Provider outages should be reported honestly.
+The current desktop prototype uses Open-Meteo for weather and RSS for news. The face is display-only: application actions, appearance preferences, and news navigation are voice-controlled. Weather/news requests are handled by provider adapters, not invented by an AI model. Provider outages should be reported honestly.
 
 **Unfinished release requirement:** genuine weather and news must be retrieved over DEBO's own network connection while the development laptop is powered off and Ollama is unavailable. This has not yet been proven on target hardware. No final robot computer or laptop/Ollama bridge has been selected or implemented.
 

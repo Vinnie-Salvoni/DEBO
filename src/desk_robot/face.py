@@ -12,7 +12,6 @@ import queue
 import random
 import tkinter as tk
 from concurrent.futures import Future, ThreadPoolExecutor
-from tkinter import colorchooser, ttk
 
 from desk_robot.core.events import RobotEvent, RobotEventType
 from desk_robot.face_geometry import (
@@ -163,19 +162,6 @@ class DeboFace:
         )
         self._ticker_x = 0.0
         self._ticker_speed = 2.0
-        self.next_story_button = tk.Button(
-            self.info_panel, text="NEXT STORY  →", command=lambda: self.submit_message("next story"),
-            bg="#12313A", fg="#D9FFFF", activebackground="#1B4C58",
-            activeforeground="#FFFFFF", relief="flat", padx=12, pady=6,
-            font=("Segoe UI", 9, "bold"), cursor="hand2",
-        )
-        self.read_story_button = tk.Button(
-            self.info_panel, text="READ FULL STORY  ▶",
-            command=lambda: self.submit_message("read the full story"),
-            bg="#173047", fg="#D9EDFF", activebackground="#244866",
-            activeforeground="#FFFFFF", relief="flat", padx=12, pady=6,
-            font=("Segoe UI", 9, "bold"), cursor="hand2",
-        )
         self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
         self.info_panel.pack_forget()
         response_panel = tk.Frame(self.root, bg=PANEL, padx=18, pady=14)
@@ -186,22 +172,12 @@ class DeboFace:
         )
         self.response_label.pack(fill="x")
 
-        controls = tk.Frame(self.root, bg=BG)
-        controls.pack(fill="x", padx=24, pady=(0, 18))
         self.listen_hint = tk.Label(
-            controls,
-            text="SAY “HEY DEBO” TO TALK",
-            bg=BG,
-            fg=MUTED,
-            font=("Segoe UI", 9, "bold"),
+            self.root,
+            text="SAY “HEY DEBO” TO TALK · SAY “HELP” FOR VOICE COMMANDS",
+            bg=BG, fg=MUTED, font=("Segoe UI", 9, "bold"),
         )
-        self.listen_hint.pack(side="left", fill="x", expand=True, anchor="w")
-        tk.Button(
-            controls, text="⚙", command=self.open_settings, font=("Segoe UI", 13),
-            bg="#111923", fg="#D4E5F2", activebackground="#263444",
-            activeforeground="#FFFFFF", relief="flat", bd=0, padx=13, pady=7,
-            cursor="hand2",
-        ).pack(side="right")
+        self.listen_hint.pack(fill="x", padx=24, pady=(0, 18))
 
     def close(self) -> None:
         if self.closed:
@@ -630,8 +606,6 @@ class DeboFace:
 
     def hide_information(self) -> None:
         self.info_panel.pack_forget()
-        self.next_story_button.pack_forget()
-        self.read_story_button.pack_forget()
         self.ticker_canvas.itemconfigure(self._ticker_item, text="")
         self._ticker_text = ""
         self._ticker_items = []
@@ -639,8 +613,6 @@ class DeboFace:
     def show_information_loading(self, kind: str) -> None:
         self.show_expression("curious", 0.24)
         self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
-        self.next_story_button.pack_forget()
-        self.read_story_button.pack_forget()
         self.info_title.configure(text=f"{kind.upper()}  /  CONNECTING")
         self.info_main.configure(text="One moment — I'm checking the latest information.")
         self.info_meta.configure(text="Live data · Network requests run in the background")
@@ -691,8 +663,6 @@ class DeboFace:
             high_low = f"  ·  Today H {report.daily_high_c:.0f}° / L {report.daily_low_c:.0f}°C"
         forecast = f"  ·  Outlook {report.forecast_condition}" if report.forecast_condition else ""
         self.info_meta.configure(text=f"{report.provider}  ·  Observed {observed}  ·  Retrieved {fetched}{high_low}{forecast}")
-        self.next_story_button.pack_forget()
-        self.read_story_button.pack_forget()
         ticker = f"CURRENT CONDITIONS  •  {report.location}  •  {condition}  •  {report.temperature_c:.1f}°C"
         if high_low:
             ticker += f"  •  {high_low.strip(' ·')}"
@@ -713,10 +683,8 @@ class DeboFace:
         first = articles[index]
         self.info_title.configure(text=f"NEWS  /  TOP STORY  ·  {index + 1} OF {len(articles)}")
         self.info_main.configure(text=first.title)
-        self.next_story_button.pack(anchor="e", pady=(8, 0))
         published = first.published_at.strftime("%d %b · %H:%M UTC") if first.published_at else "publication time unavailable"
         self.info_meta.configure(text=f"{first.source or report.provider}  ·  {published}  ·  Retrieved {report.fetched_at.strftime('%H:%M UTC')}")
-        self.read_story_button.pack(anchor="e", pady=(6, 0))
         self._set_ticker("\n".join(f"{index}. {article.title} — {article.source}" for index, article in enumerate(articles, start=1)))
 
     def _present_latest_information(self) -> None:
@@ -729,9 +697,7 @@ class DeboFace:
         elif getattr(self.robot, "last_intent", "") in {"weather", "news", "next_news", "full_story"}:
             intent = self.robot.last_intent
             self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
-            self.next_story_button.pack_forget()
-            self.read_story_button.pack_forget()
-            if intent == "weather" and "which location" in self.response.lower():
+                    if intent == "weather" and "which location" in self.response.lower():
                 self.info_title.configure(text="WEATHER  /  LOCATION NEEDED")
                 self.info_main.configure(text="Tell me a city or town, for example: “weather in London”.")
                 self.info_meta.configure(text="I'll fetch live conditions and today's high/low.")
@@ -983,80 +949,6 @@ class DeboFace:
         self.draw_face()
         self._animate_ticker()
         self.root.after(FRAME_MS, self.animate)
-
-    def open_settings(self) -> None:
-        window = tk.Toplevel(self.root)
-        window.title("DEBO — Settings")
-        window.configure(bg=PANEL)
-        window.resizable(False, False)
-        window.transient(self.root)
-        window.grab_set()
-        panel = tk.Frame(window, bg=PANEL, padx=22, pady=20)
-        panel.pack(fill="both", expand=True)
-        tk.Label(panel, text="DEBO settings", bg=PANEL, fg=TEXT,
-                 font=("Segoe UI", 16, "bold")).pack(anchor="w", pady=(0, 16))
-
-        color_row = tk.Frame(panel, bg=PANEL)
-        color_row.pack(fill="x")
-        tk.Label(color_row, text="Eye colour", bg=PANEL, fg="#D4E5F2").pack(side="left")
-
-        def choose_color() -> None:
-            chosen = colorchooser.askcolor(color=self.settings["eye_color"],
-                                           title="Choose DEBO's eye colour", parent=window)[1]
-            if chosen:
-                self.settings["eye_color"] = chosen
-                color_button.configure(bg=chosen)
-
-        color_button = tk.Button(color_row, text="Choose colour", command=choose_color,
-                                 bg=self.settings["eye_color"], fg="#061015", relief="flat", padx=12)
-        color_button.pack(side="right")
-        tk.Label(panel, text="Glow intensity", bg=PANEL, fg="#D4E5F2").pack(
-            anchor="w", pady=(16, 0))
-        glow_var = tk.IntVar(value=int(self.settings["glow"]))
-        ttk.Scale(panel, from_=0, to=100, variable=glow_var, orient="horizontal", length=320).pack(
-            fill="x", pady=(4, 12))
-        tk.Label(panel, text="Animation speed", bg=PANEL, fg="#D4E5F2").pack(anchor="w")
-        speed_var = tk.DoubleVar(value=float(self.settings["animation_speed"]))
-        ttk.Scale(panel, from_=0.5, to=2.0, variable=speed_var, orient="horizontal", length=320).pack(
-            fill="x", pady=(4, 12))
-        accent_var = tk.BooleanVar(value=bool(self.settings["automatic_accents"]))
-        tk.Checkbutton(panel, text="Activity-specific eye colours", variable=accent_var,
-                       bg=PANEL, fg="#D4E5F2", activebackground=PANEL,
-                       activeforeground="#FFFFFF", selectcolor="#182330").pack(anchor="w", pady=(2, 12))
-        sound_var = tk.BooleanVar(value=bool(self.settings["sound_enabled"]))
-        tk.Checkbutton(panel, text="Enable robotic sound effects", variable=sound_var,
-                       bg=PANEL, fg="#D4E5F2", activebackground=PANEL,
-                       activeforeground="#FFFFFF", selectcolor="#182330").pack(anchor="w", pady=(0, 8))
-        volume_var = tk.IntVar(value=int(self.settings["sound_volume"]))
-        ttk.Scale(panel, from_=0, to=100, variable=volume_var, orient="horizontal", length=320).pack(
-            fill="x", pady=(4, 10))
-        speech_var = tk.BooleanVar(value=bool(self.settings["speech_enabled"]))
-        tk.Checkbutton(panel, text="Speak replies and weather", variable=speech_var,
-                       bg=PANEL, fg="#D4E5F2", activebackground=PANEL,
-                       activeforeground="#FFFFFF", selectcolor="#182330").pack(anchor="w", pady=(2, 6))
-        speech_volume_var = tk.IntVar(value=int(self.settings["speech_volume"]))
-        tk.Label(panel, text="Speech volume", bg=PANEL, fg="#D4E5F2").pack(anchor="w")
-        ttk.Scale(panel, from_=0, to=100, variable=speech_volume_var, orient="horizontal", length=320).pack(
-            fill="x", pady=(4, 16))
-
-        def save_and_close() -> None:
-            self.settings["glow"] = int(glow_var.get())
-            self.settings["animation_speed"] = round(float(speed_var.get()), 2)
-            self.settings["automatic_accents"] = accent_var.get()
-            self.settings["sound_enabled"] = sound_var.get()
-            self.settings["sound_volume"] = int(volume_var.get())
-            self.settings["speech_enabled"] = speech_var.get()
-            self.settings["speech_volume"] = int(speech_volume_var.get())
-            self.sound.set_enabled(self.settings["sound_enabled"])
-            self.sound.set_volume(self.settings["sound_volume"] / 100)
-            self.speech.set_enabled(self.settings["speech_enabled"])
-            self.speech.set_volume(self.settings["speech_volume"] / 100)
-            save_settings(self.settings)
-            window.destroy()
-
-        tk.Button(panel, text="Save settings", command=save_and_close, bg="#12313A", fg="#D9FFFF",
-                  activebackground="#1B4C58", activeforeground="#FFFFFF", relief="flat",
-                  padx=16, pady=9).pack(anchor="e")
 
     def mainloop(self) -> None:
         """Compatibility helper for callers that want to run the face explicitly."""
