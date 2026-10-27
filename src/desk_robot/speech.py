@@ -116,7 +116,7 @@ class SpeechSynthesizer:
         rate = params.framerate
         for index, sample in enumerate(samples):
             time_seconds = (index // params.nchannels) / max(1, rate)
-            carrier = 0.86 + 0.14 * math.sin(2.0 * math.pi * 34.0 * time_seconds)
+            carrier = (0.78 + 0.22 * math.sin(2.0 * math.pi * 34.0 * time_seconds)\n                       + 0.06 * math.sin(2.0 * math.pi * 57.0 * time_seconds))
             value = sample * carrier
             # A tiny soft clip rounds harsh peaks without making speech unintelligible.
             samples[index] = max(-32768, min(32767, int(32767.0 * math.tanh(value / 39000.0))))
