@@ -156,3 +156,99 @@ def test_farewell_response_is_preserved() -> None:
     response = robot.respond("bye")
 
     assert "See you later!" in response
+
+
+from datetime import UTC, datetime
+
+from desk_robot.information import (
+    InformationError,
+    NewsArticle,
+    NewsReport,
+    WeatherReport,
+)
+
+
+class FakeWeatherProvider:
+    def fetch_current(self, location: str) -> WeatherReport:
+        return WeatherReport(
+            location=f"{location}, UK",
+            temperature_c=14.5,
+            condition="Light rain",
+            provider="fake-weather",
+            fetched_at=datetime.now(UTC),
+            daily_high_c=16.0,
+            daily_low_c=9.0,
+            forecast_condition="Rain",
+        )
+
+
+class FakeNewsProvider:
+    def __init__(self, fail: bool = False) -> None:
+        self.fail = fail
+
+    def fetch_latest(self, limit: int = 5) -> NewsReport:
+        if self.fail:
+            raise InformationError("The news service is unavailable.")
+        articles = (
+            NewsArticle("First real headline", "Example source", "https://example.com/1"),
+            NewsArticle("Second real headline", "Example source", "https://example.com/2"),
+        )
+        return NewsReport("Example RSS", datetime.now(UTC), articles[:limit])
+
+
+def make_information_robot(*, news_fail: bool = False) -> DeskRobot:
+    return DeskRobot(
+        weather_provider=FakeWeatherProvider(),
+        news_provider=FakeNewsProvider(fail=news_fail),
+    )
+
+
+def test_weather_request_exposes_real_provider_result() -> None:
+    robot = make_information_robot()
+    response = robot.respond("weather in London")
+
+    assert robot.last_intent == "weather"
+    assert robot.last_weather_report is not None
+    assert robot.last_weather_report.location == "London, UK"
+    assert robot.last_weather_report.daily_high_c == 16.0
+    assert "14.5°C" in response
+
+
+def test_weather_without_location_does_not_invent_conditions() -> None:
+    robot = make_information_robot()
+
+    response = robot.respond("what is the weather?")
+
+    assert "which location" in response.lower()
+    assert robot.last_weather_report is None
+
+
+def test_news_uses_a_compact_visual_first_response() -> None:
+    robot = make_information_robot()
+
+    response = robot.respond("show me the news")
+
+    assert robot.last_news_report is not None
+    assert "2 headlines" in response
+    assert "First real headline" not in response
+
+
+def test_next_story_advances_the_cached_news_selection() -> None:
+    robot = make_information_robot()
+    robot.respond("show me the news")
+
+    response = robot.respond("next story")
+
+    assert robot.last_intent == "next_news"
+    assert robot.last_news_report is not None
+    assert robot.last_news_index == 1
+    assert "Second real headline" in response
+
+
+def test_news_provider_failure_is_recoverable() -> None:
+    robot = make_information_robot(news_fail=True)
+
+    response = robot.respond("show me the news")
+
+    assert "unavailable" in response.lower()
+    assert robot.last_news_report is None
