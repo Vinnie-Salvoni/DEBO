@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
+from typing import ClassVar, Protocol
 from urllib.parse import urlparse
-from typing import Protocol
 
 import feedparser
 import requests
@@ -110,7 +110,7 @@ def _weather_condition(code: int) -> str:
 class _ArticleTextParser(HTMLParser):
     """Extract readable paragraph text without a heavyweight scraping dependency."""
 
-    _ignored_tags = {"script", "style", "nav", "footer", "header", "aside", "form"}
+    _ignored_tags: ClassVar[frozenset[str]] = frozenset(\n        {"script", "style", "nav", "footer", "header", "aside", "form"}\n    )
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
