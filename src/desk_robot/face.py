@@ -7,10 +7,10 @@ Tkinter is used for rendering; all Canvas operations remain on the UI thread.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import queue
 import random
-import logging
 import tkinter as tk
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
@@ -1026,10 +1026,13 @@ class DeboFace:
 
     def _update_blink(self, speed: float) -> None:
         # No random blink can interrupt the held thinking pose or the response reveal.
-        if self.state not in {"thinking", "happy", "error"}:
-            if self.blink_started is None and self.time >= self.next_blink:
-                self.blink_started = self.time
-                self.blink_duration = 0.34 if random.random() < 0.18 else random.uniform(0.16, 0.24)
+        if (
+            self.state not in {"thinking", "happy", "error"}
+            and self.blink_started is None
+            and self.time >= self.next_blink
+        ):
+            self.blink_started = self.time
+            self.blink_duration = 0.34 if random.random() < 0.18 else random.uniform(0.16, 0.24)
         if self.blink_started is None:
             return
         progress = (self.time - self.blink_started) / max(0.08, self.blink_duration / speed)
