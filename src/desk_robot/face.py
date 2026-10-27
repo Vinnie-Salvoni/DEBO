@@ -308,6 +308,7 @@ class DeboFace:
         self.response = "Hey! I'm DEBO. What's on your mind?"
         self.idle_callback: str | None = None
         self._request_id = 0
+        self._active_future: Future[str] | None = None
         self._expression_started = 0.0
         self._expression_from = EXPRESSIONS["idle"]
         self._expression_to = EXPRESSIONS["idle"]
@@ -497,8 +498,10 @@ class DeboFace:
     def submit_message(self, message: str) -> None:
         """Process a recognised voice transcript without any text-entry UI."""
         message = str(message).strip()
-        if not message or self.busy or self.closed:
+        if not message or self.closed:
             return
+        if self._active_future is not None:
+            self._active_future.cancel()
         self._request_id += 1
         request_id = self._request_id
         self.busy = True
@@ -522,6 +525,7 @@ class DeboFace:
         else:
             self.hide_information()
         future = self.executor.submit(self.robot.respond, message)
+        self._active_future = future
         future.add_done_callback(
             lambda result, rid=request_id: self._collect_result(result, rid)
         )
