@@ -82,9 +82,10 @@ def test_combined_wake_and_command_emits_both_events(monkeypatch) -> None:
 
 
 def test_voice_input_remains_separate_from_speech_output() -> None:
-    source = Path(__file__).with_name("voice.py").read_text(encoding="utf-8")
-    speech_source = Path(__file__).with_name("speech.py").read_text(encoding="utf-8")
-    sound_source = Path(__file__).with_name("sound.py").read_text(encoding="utf-8")
+    package_dir = Path(__file__).resolve().parents[2] / "src" / "desk_robot"
+    source = (package_dir / "voice.py").read_text(encoding="utf-8")
+    speech_source = (package_dir / "speech.py").read_text(encoding="utf-8")
+    sound_source = (package_dir / "sound.py").read_text(encoding="utf-8")
 
     assert "pyttsx3" not in source
     assert "def pause(" in source
