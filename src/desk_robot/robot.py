@@ -158,10 +158,9 @@ class DeskRobot:
             intent = "recall"
         elif "help" in normalised:
             intent = "help"
-        elif self._is_weather_request(normalised):
-            intent = "weather"
-        elif self.last_weather_location and re.match(
-            r"^(?:and\s+)?what about\s+.+[?.!]*$", normalised
+        elif self._is_weather_request(normalised) or (
+            self.last_weather_location
+            and re.match(r"^(?:and\s+)?what about\s+.+[?.!]*$", normalised)
         ):
             intent = "weather"
         elif any(phrase in normalised for phrase in ("read the full story", "read full story", "read me the story", "read this story", "full story", "read the article", "read article")):
