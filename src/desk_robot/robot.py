@@ -1,8 +1,11 @@
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from desk_robot.config import BrainConfig
 from desk_robot.context import ConversationContext
 from desk_robot.core.capabilities import Capability, CapabilityRegistry, CapabilityStatus
+from desk_robot.core.events import RobotEvent, RobotEventType
 from desk_robot.information import (
     InformationError,
     NewsProvider,
@@ -11,6 +14,9 @@ from desk_robot.information import (
     WeatherProvider,
 )
 from desk_robot.personality import Personality
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -28,6 +34,7 @@ class DeskRobot:
         weather_provider: WeatherProvider | None = None,
         news_provider: NewsProvider | None = None,
         config: BrainConfig | None = None,
+        event_sink: Callable[[RobotEvent], None] | None = None,
     ) -> None:
         self.config = config if config is not None else BrainConfig.from_environment()
         resolved_name = name if name is not None else self.config.robot_name
@@ -38,6 +45,7 @@ class DeskRobot:
         )
         self.state = RobotState(name=resolved_name)
         self.capabilities = CapabilityRegistry()
+        self._event_sink = event_sink
         self.personality = Personality()
         self.context = ConversationContext(max_turns=resolved_context_limit)
         self.weather_provider = (
@@ -56,6 +64,37 @@ class DeskRobot:
         self.news_cache = None
         self.last_news_index = 0
         self.last_story_text: str | None = None
+
+    def _emit_event(
+        self,
+        event_type: RobotEventType,
+        *,
+        message: str = "",
+        data: dict[str, object] | None = None,
+    ) -> None:
+        """Notify optional observers without letting a renderer break the brain."""
+        if self._event_sink is None:
+            return
+        try:
+            self._event_sink(
+                RobotEvent(type=event_type, message=message, data={} if data is None else data)
+            )
+        except Exception:
+            logger.exception("DEBO event sink failed for %s", event_type.value)
+
+    def _set_capability_status(
+        self,
+        capability: Capability,
+        status: CapabilityStatus,
+        *,
+        detail: str | None = None,
+    ) -> None:
+        snapshot = self.capabilities.set_status(capability, status, detail=detail)
+        self._emit_event(
+            RobotEventType.CAPABILITY_CHANGED,
+            message=detail or "",
+            data={"capability": capability.value, "status": snapshot.status.value},
+        )
 
     def respond(self, message: str) -> str:
         original_message = message.strip()
@@ -111,10 +150,17 @@ class DeskRobot:
                     "For example, weather in London."
                 )
             else:
+                self._emit_event(
+                    RobotEventType.WEATHER_LOOKUP_STARTED, message="Retrieving current weather."
+                )
                 try:
                     report = self.weather_provider.fetch_current(location)
                     self.last_weather_report = report
-                    self.capabilities.set_status(Capability.WEATHER, CapabilityStatus.AVAILABLE)
+                    self._set_capability_status(Capability.WEATHER, CapabilityStatus.AVAILABLE)
+                    self._emit_event(
+                        RobotEventType.WEATHER_LOOKUP_SUCCEEDED,
+                        data={"location": report.location, "provider": report.provider},
+                    )
                     response = (
                         f"Here's the current weather for {report.location}: "
                         f"{report.condition}, {report.temperature_c:.1f}°C. "
@@ -126,19 +172,26 @@ class DeskRobot:
                             f"{report.observed_at.strftime('%H:%M UTC')}."
                         )
                 except InformationError as error:
-                    self.capabilities.set_status(
+                    self._set_capability_status(
                         Capability.WEATHER, CapabilityStatus.UNAVAILABLE, detail=str(error)
                     )
+                    self._emit_event(RobotEventType.WEATHER_LOOKUP_FAILED, message=str(error))
                     response = str(error)
 
         elif intent == "news":
+            self._emit_event(RobotEventType.NEWS_LOOKUP_STARTED, message="Retrieving headlines.")
             try:
                 report = self.news_provider.fetch_latest(limit=self.config.news_result_limit)
                 self.last_news_report = report
-                self.capabilities.set_status(
+                self._set_capability_status(
                     Capability.NEWS,
                     CapabilityStatus.AVAILABLE if report.articles else CapabilityStatus.UNAVAILABLE,
                     detail=None if report.articles else "The news feed returned no headlines.",
+                )
+                self._emit_event(
+                    RobotEventType.NEWS_RESULTS_READY if report.articles else RobotEventType.NEWS_LOOKUP_FAILED,
+                    message="" if report.articles else "The news feed returned no headlines.",
+                    data={"article_count": len(report.articles), "provider": report.provider},
                 )
                 self.news_cache = report
                 self.last_news_index = 0
@@ -147,9 +200,10 @@ class DeskRobot:
                 else:
                     response = "The news feed returned no headlines."
             except InformationError as error:
-                self.capabilities.set_status(
+                self._set_capability_status(
                     Capability.NEWS, CapabilityStatus.UNAVAILABLE, detail=str(error)
                 )
+                self._emit_event(RobotEventType.NEWS_LOOKUP_FAILED, message=str(error))
                 response = str(error)
 
         elif intent == "full_story":
