@@ -1188,6 +1188,14 @@ class DeboFace:
                        activeforeground="#FFFFFF", selectcolor="#182330").pack(anchor="w", pady=(0, 8))
         volume_var = tk.IntVar(value=int(self.settings["sound_volume"]))
         ttk.Scale(panel, from_=0, to=100, variable=volume_var, orient="horizontal", length=320).pack(
+            fill="x", pady=(4, 10))
+        speech_var = tk.BooleanVar(value=bool(self.settings["speech_enabled"]))
+        tk.Checkbutton(panel, text="Speak replies and weather", variable=speech_var,
+                       bg=PANEL, fg="#D4E5F2", activebackground=PANEL,
+                       activeforeground="#FFFFFF", selectcolor="#182330").pack(anchor="w", pady=(2, 6))
+        speech_volume_var = tk.IntVar(value=int(self.settings["speech_volume"]))
+        tk.Label(panel, text="Speech volume", bg=PANEL, fg="#D4E5F2").pack(anchor="w")
+        ttk.Scale(panel, from_=0, to=100, variable=speech_volume_var, orient="horizontal", length=320).pack(
             fill="x", pady=(4, 16))
 
         def save_and_close() -> None:
@@ -1196,8 +1204,12 @@ class DeboFace:
             self.settings["automatic_accents"] = accent_var.get()
             self.settings["sound_enabled"] = sound_var.get()
             self.settings["sound_volume"] = int(volume_var.get())
+            self.settings["speech_enabled"] = speech_var.get()
+            self.settings["speech_volume"] = int(speech_volume_var.get())
             self.sound.set_enabled(self.settings["sound_enabled"])
             self.sound.set_volume(self.settings["sound_volume"] / 100)
+            self.speech.set_enabled(self.settings["speech_enabled"])
+            self.speech.set_volume(self.settings["speech_volume"] / 100)
             save_settings(self.settings)
             window.destroy()
 
