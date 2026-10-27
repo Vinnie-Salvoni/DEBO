@@ -529,6 +529,17 @@ class DeboFace:
         self.results.put((event, text, -1))
 
 
+
+    def _speak_text(self, text: str) -> None:
+        """Speak away from Tk's UI thread and temporarily mute DEBO's own microphone."""
+        try:
+            self.voice.pause()
+            self.speech.speak(text)
+        except Exception:
+            logging.getLogger(__name__).exception("DEBO speech playback failed")
+        finally:
+            self.voice.resume()
+
     def _handle_settings_command(self, message: str) -> str | None:
         """Apply common spoken preference commands without opening a settings dialog."""
         import re
@@ -616,6 +627,9 @@ class DeboFace:
         return None
 
     def _finish_settings_command(self, response: str) -> None:
+        if self._active_future is not None:
+            self._active_future.cancel()
+        self._request_id += 1
         self.response = response
         self.response_label.configure(text=response)
         self.busy = False
@@ -623,7 +637,7 @@ class DeboFace:
         self.set_state("happy")
         self._happy_until = self.time + 0.75
         if self.settings.get("speech_enabled", True):
-            self.speech_executor.submit(self.speech.speak, response)
+            self.speech_executor.submit(self._speak_text, response)
         self.sound.play("success")
 
     def submit_message(self, message: str) -> None:
@@ -766,7 +780,7 @@ class DeboFace:
                 story_text = getattr(self.robot, "last_story_text", None)
                 speech_text = story_text if story_text else result
                 if self.settings.get("speech_enabled", True) and speech_text:
-                    self.speech_executor.submit(self.speech.speak, speech_text)
+                    self.speech_executor.submit(self._speak_text, speech_text)
             elif getattr(self.robot, "last_intent", "") in {"weather", "news", "next_news", "full_story"}:
                 self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
                 self.info_title.configure(text=f"{self.robot.last_intent.upper()}  /  UNAVAILABLE")
