@@ -31,10 +31,12 @@ Say **“Hey DEBO”**, then give a command. You can combine the wake phrase and
 - “Next story” — selects the next headline.
 - “Read the full story” — fetches and reads the currently selected article, when the publisher allows its text to be extracted.
 - “Change my eye colour to blue” — also supports teal, light blue, purple, pink, green, lime, red, orange, yellow, white, and gold.
-- “Animation speed fast”, “animation speed normal”, or “animation speed slow”.
+- “Eye glow high” / “eye glow low” / “eye glow 65”.
+- “Animation speed fast”, “animation speed normal”, “animation speed slow”, or “animation speed 1.5”.
+- “Automatic accents off” / “automatic accents on”.
 - “Turn sound off” / “turn sound on”.
 - “Turn speech off” / “turn speech on”.
-- “Speech volume 70” or “sound volume 40”.
+- “Speech volume 70”, “speech rate 170”, or “sound volume 40”.
 - “Settings” — gives examples of spoken preference commands.
 - “What did I just say?” — recalls the previous user message.
 - “Help” — lists supported interaction hints.
