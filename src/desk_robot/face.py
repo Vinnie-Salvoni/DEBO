@@ -34,7 +34,6 @@ DEFAULT_SETTINGS = {
     "automatic_accents": True,
     "sound_enabled": True,
     "sound_volume": 55,
-    "spoken_responses": True,
 }
 COLOUR_TRANSITION_SECONDS = 0.75
 GAZE_MIN_INTERVAL = 2.2
@@ -55,7 +54,7 @@ def load_settings() -> dict:
         settings["glow"] = max(0, min(100, int(settings["glow"])))
         settings["animation_speed"] = max(0.5, min(2.0, float(settings["animation_speed"])))
         settings["sound_volume"] = max(0, min(100, int(settings["sound_volume"])))
-        for key in ("automatic_accents", "sound_enabled", "spoken_responses"):
+        for key in ("automatic_accents", "sound_enabled"):
             settings[key] = bool(settings[key])
         for key in ("eye_color", "accent_color"):
             value = str(settings[key])
@@ -298,11 +297,9 @@ class DeboFace:
             enabled=self.settings["sound_enabled"],
             volume=self.settings["sound_volume"] / 100,
         )
-        self.voice = VoiceController(spoken_responses=self.settings["spoken_responses"])
+        self.voice = VoiceController()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="debo-brain")
-        self.voice_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="debo-voice")
         self.results: queue.Queue[tuple[str, str, int]] = queue.Queue()
-        self.voice_recording = False
 
         self.state = "idle"
         self.time = 0.0
@@ -341,8 +338,8 @@ class DeboFace:
 
         self.root = tk.Tk()
         self.root.title("DEBO | Desktop Companion")
-        self.root.geometry("820x650")
-        self.root.minsize(600, 500)
+        self.root.geometry("900x760")
+        self.root.minsize(620, 560)
         self.root.configure(bg=BG)
         self._build_interface()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -369,6 +366,31 @@ class DeboFace:
 
         self.canvas = tk.Canvas(self.root, bg=BG, highlightthickness=0, bd=0)
         self.canvas.pack(fill="both", expand=True, padx=12, pady=4)
+
+        self.info_panel = tk.Frame(self.root, bg="#0A111B", padx=18, pady=12,
+                                   highlightthickness=1, highlightbackground="#1A2C3C")
+        self.info_title = tk.Label(self.info_panel, text="", bg="#0A111B", fg="#65DCD4",
+                                   font=("Segoe UI", 9, "bold"), anchor="w")
+        self.info_title.pack(fill="x")
+        self.info_main = tk.Label(self.info_panel, text="", bg="#0A111B", fg=TEXT,
+                                  font=("Segoe UI", 17, "bold"), anchor="w",
+                                  justify="left", wraplength=800)
+        self.info_main.pack(fill="x", pady=(4, 2))
+        self.info_meta = tk.Label(self.info_panel, text="", bg="#0A111B", fg=MUTED,
+                                  font=("Segoe UI", 9), anchor="w", justify="left")
+        self.info_meta.pack(fill="x", pady=(0, 8))
+        self.ticker_canvas = tk.Canvas(self.info_panel, height=30, bg="#101C29",
+                                       highlightthickness=0, bd=0)
+        self.ticker_canvas.pack(fill="x")
+        self._ticker_text = ""
+        self._ticker_item = self.ticker_canvas.create_text(
+            0, 15, text="", anchor="w", fill="#C8E8F4",
+            font=("Segoe UI", 10, "bold"),
+        )
+        self._ticker_x = 0.0
+        self._ticker_speed = 1.25
+        self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
+        self.info_panel.pack_forget()
         response_panel = tk.Frame(self.root, bg=PANEL, padx=18, pady=14)
         response_panel.pack(fill="x", padx=24, pady=(4, 14))
         self.response_label = tk.Label(
@@ -406,7 +428,6 @@ class DeboFace:
             pass
         self.voice.close()
         self.executor.shutdown(wait=False, cancel_futures=True)
-        self.voice_executor.shutdown(wait=False, cancel_futures=True)
         try:
             self.root.destroy()
         except tk.TclError:
@@ -487,6 +508,13 @@ class DeboFace:
             if not self.closed and self.busy and request_id == self._request_id
             else None,
         )
+        lowered = message.lower()
+        if any(word in lowered for word in ("weather", "temperature", "forecast")):
+            self.show_information_loading("weather")
+        elif any(word in lowered for word in ("news", "headlines", "latest stories", "what's happening", "what is happening")):
+            self.show_information_loading("news")
+        else:
+            self.hide_information()
         future = self.executor.submit(self.robot.respond, message)
         future.add_done_callback(
             lambda result, rid=request_id: self._collect_result(result, rid)
@@ -523,20 +551,6 @@ class DeboFace:
                     self.status.configure(text="WAITING FOR HEY DEBO", fg=self.current_accent())
                 continue
 
-            if kind == "speaking_start":
-                self._cancel_idle_callback()
-                if not self.busy:
-                    self.set_state("speaking")
-                    self.response_label.configure(text="Speaking…")
-                continue
-
-            if kind == "speaking_end":
-                if not self.busy:
-                    self.set_state("idle")
-                    self.status.configure(text="WAITING FOR HEY DEBO", fg=self.current_accent())
-                    self.response_label.configure(text="I'm here. Say “Hey DEBO” when you need me.")
-                continue
-
             if kind == "model_error":
                 self.response = result
                 self.response_label.configure(text=f"Speech model unavailable: {result}")
@@ -544,14 +558,6 @@ class DeboFace:
                 continue
 
             if kind == "transcription_error":
-                self.response = result
-                self.response_label.configure(text=result)
-                if not self.busy:
-                    self.set_state("error")
-                    self.idle_callback = self.root.after(3500, self.return_to_idle)
-                continue
-
-            if kind == "tts_error":
                 self.response = result
                 self.response_label.configure(text=result)
                 if not self.busy:
@@ -610,6 +616,14 @@ class DeboFace:
             self.response = result
             self.response_label.configure(text=result)
             self.busy = False
+            if kind == "ok":
+                self._present_latest_information()
+            elif getattr(self.robot, "last_intent", "") in {"weather", "news"}:
+                self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
+                self.info_title.configure(text=f"{self.robot.last_intent.upper()}  /  UNAVAILABLE")
+                self.info_main.configure(text="I couldn't reach the information service. Please try again.")
+                self.info_meta.configure(text="The rest of DEBO is still ready.")
+                self._set_ticker("LIVE INFORMATION UNAVAILABLE")
             self._cancel_idle_callback()
             if kind == "error":
                 self._happy_until = 0.0
@@ -619,13 +633,77 @@ class DeboFace:
             else:
                 self.set_state("happy")
                 self._happy_until = self.time + 1.0 / self._speed()
-                if self.settings["spoken_responses"]:
-                    # Do not overlap the success chirp with TTS; both use the speaker.
-                    self.voice.speak_async(result)
-                else:
-                    self.sound.play("success")
+                self.sound.play("success")
                 # The callback is a fallback; the animation clock owns the happy hold.
                 self.idle_callback = self.root.after(5200, self.return_to_idle)
+
+
+    def hide_information(self) -> None:
+        self.info_panel.pack_forget()
+        self.ticker_canvas.itemconfigure(self._ticker_item, text="")
+        self._ticker_text = ""
+
+    def show_information_loading(self, kind: str) -> None:
+        self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
+        self.info_title.configure(text=f"{kind.upper()}  /  CONNECTING")
+        self.info_main.configure(text="One moment — I'm checking the latest information.")
+        self.info_meta.configure(text="Live data · Network requests run in the background")
+        self._set_ticker(f"DEBO IS FETCHING {kind.upper()}…")
+
+    def _set_ticker(self, text: str) -> None:
+        self._ticker_text = "     •     ".join(part.strip() for part in str(text).splitlines() if part.strip())
+        self._ticker_x = float(self.ticker_canvas.winfo_width() or 700)
+        self.ticker_canvas.itemconfigure(self._ticker_item, text=self._ticker_text)
+        self.ticker_canvas.coords(self._ticker_item, self._ticker_x, 15)
+
+    def _animate_ticker(self) -> None:
+        if not self._ticker_text or not self.info_panel.winfo_ismapped():
+            return
+        self._ticker_x -= self._ticker_speed
+        bounds = self.ticker_canvas.bbox(self._ticker_item)
+        if bounds and bounds[2] < 0:
+            self._ticker_x = float(self.ticker_canvas.winfo_width() or 700)
+        self.ticker_canvas.coords(self._ticker_item, self._ticker_x, 15)
+
+    def present_weather(self, report) -> None:
+        condition = str(report.condition or "Conditions unavailable")
+        lowered = condition.lower()
+        symbol = "☀" if any(word in lowered for word in ("clear", "sun")) else (
+            "❄" if "snow" in lowered or "freez" in lowered else (
+                "ϟ" if "thunder" in lowered else ("☂" if "rain" in lowered or "drizzle" in lowered else "☁")
+            )
+        )
+        self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
+        self.info_title.configure(text=f"WEATHER  /  {str(report.location).upper()}")
+        self.info_main.configure(text=f"{symbol}   {report.temperature_c:.1f}°C   ·   {condition}")
+        observed = report.observed_at.strftime("%H:%M") if report.observed_at else "time unavailable"
+        fetched = report.fetched_at.strftime("%H:%M UTC") if report.fetched_at else "time unavailable"
+        self.info_meta.configure(text=f"{report.provider}  ·  Observed {observed}  ·  Retrieved {fetched}")
+        self._set_ticker(f"CURRENT CONDITIONS  •  {report.location}  •  {condition}  •  {report.temperature_c:.1f}°C")
+
+    def present_news(self, report) -> None:
+        articles = tuple(report.articles or ())
+        self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
+        if not articles:
+            self.info_title.configure(text="NEWS  /  NO STORIES")
+            self.info_main.configure(text="I couldn't find any readable headlines just now.")
+            self.info_meta.configure(text=f"{report.provider} · Try again in a moment")
+            self._set_ticker("NO HEADLINES AVAILABLE")
+            return
+        first = articles[0]
+        self.info_title.configure(text=f"NEWS  /  TOP STORY  ·  1 OF {len(articles)}")
+        self.info_main.configure(text=first.title)
+        published = first.published_at.strftime("%d %b · %H:%M UTC") if first.published_at else "publication time unavailable"
+        self.info_meta.configure(text=f"{first.source or report.provider}  ·  {published}  ·  Retrieved {report.fetched_at.strftime('%H:%M UTC')}")
+        self._set_ticker("     •     ".join(f"{index}. {article.title} — {article.source}" for index, article in enumerate(articles, start=1)))
+
+    def _present_latest_information(self) -> None:
+        weather = getattr(self.robot, "last_weather_report", None)
+        news = getattr(self.robot, "last_news_report", None)
+        if weather is not None:
+            self.present_weather(weather)
+        elif news is not None:
+            self.present_news(news)
 
     def _cancel_idle_callback(self) -> None:
         if self.idle_callback is not None:
@@ -841,7 +919,7 @@ class DeboFace:
         if self.state == "happy" and self._happy_until and self.time >= self._happy_until:
             # The happy hold expires on the animation clock; one morph takes over cleanly.
             self._happy_until = 0.0
-            self.set_state("speaking")
+            self.set_state("idle")
 
     def animate(self) -> None:
         if self.closed:
@@ -849,6 +927,7 @@ class DeboFace:
         self.time += (FRAME_MS / 1000.0) * self._speed()
         self._poll_results()
         self.draw_face()
+        self._animate_ticker()
         self.root.after(FRAME_MS, self.animate)
 
     def open_settings(self) -> None:
@@ -894,11 +973,6 @@ class DeboFace:
         tk.Checkbutton(panel, text="Enable robotic sound effects", variable=sound_var,
                        bg=PANEL, fg="#D4E5F2", activebackground=PANEL,
                        activeforeground="#FFFFFF", selectcolor="#182330").pack(anchor="w", pady=(0, 8))
-        spoken_var = tk.BooleanVar(value=bool(self.settings["spoken_responses"]))
-        tk.Checkbutton(panel, text="Speak DEBO's responses", variable=spoken_var,
-                       bg=PANEL, fg="#D4E5F2", activebackground=PANEL,
-                       activeforeground="#FFFFFF", selectcolor="#182330").pack(anchor="w", pady=(0, 8))
-        tk.Label(panel, text="Sound volume", bg=PANEL, fg="#D4E5F2").pack(anchor="w")
         volume_var = tk.IntVar(value=int(self.settings["sound_volume"]))
         ttk.Scale(panel, from_=0, to=100, variable=volume_var, orient="horizontal", length=320).pack(
             fill="x", pady=(4, 16))
@@ -908,9 +982,7 @@ class DeboFace:
             self.settings["animation_speed"] = round(float(speed_var.get()), 2)
             self.settings["automatic_accents"] = accent_var.get()
             self.settings["sound_enabled"] = sound_var.get()
-            self.settings["spoken_responses"] = spoken_var.get()
             self.settings["sound_volume"] = int(volume_var.get())
-            self.voice.spoken_responses = self.settings["spoken_responses"]
             self.sound.set_enabled(self.settings["sound_enabled"])
             self.sound.set_volume(self.settings["sound_volume"] / 100)
             save_settings(self.settings)
