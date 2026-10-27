@@ -441,3 +441,27 @@ def test_news_detail_phrases_do_not_trigger_without_a_selected_news_story() -> N
 
     assert robot.last_intent == "unknown"
     assert "Tell me more" in response
+
+
+def test_weather_location_can_be_changed_with_a_natural_follow_up() -> None:
+    robot = make_information_robot()
+    first = robot.respond("weather in London")
+    second = robot.respond("what about Paris?")
+
+    assert "London, UK" in first
+    assert robot.last_intent == "weather"
+    assert robot.last_weather_report is not None
+    assert robot.last_weather_report.location == "Paris, UK"
+    assert "Paris, UK" in second
+
+
+def test_clearing_conversation_also_clears_weather_follow_up_context() -> None:
+    robot = make_information_robot()
+    robot.respond("weather in London")
+
+    robot.respond("forget our conversation")
+
+    assert robot.last_weather_location is None
+    response = robot.respond("what about Paris?")
+    assert robot.last_intent == "unknown"
+    assert "Tell me more" in response

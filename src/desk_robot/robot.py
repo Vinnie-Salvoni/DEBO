@@ -67,6 +67,7 @@ class DeskRobot:
         self.last_news_index = 0
         self.last_story_text: str | None = None
         self.pending_intent: str | None = None
+        self.last_weather_location: str | None = None
 
     def _emit_event(
         self,
@@ -159,6 +160,10 @@ class DeskRobot:
             intent = "help"
         elif self._is_weather_request(normalised):
             intent = "weather"
+        elif self.last_weather_location and re.match(
+            r"^(?:and\s+)?what about\s+.+[?.!]*$", normalised
+        ):
+            intent = "weather"
         elif any(phrase in normalised for phrase in ("read the full story", "read full story", "read me the story", "read this story", "full story", "read the article", "read article")):
             intent = "full_story"
         elif any(phrase in normalised for phrase in ("next story", "another story", "next headline")):
@@ -205,12 +210,17 @@ class DeskRobot:
             self.news_cache = None
             self.last_news_index = 0
             self.last_story_text = None
+            self.last_weather_location = None
             response = "All right — I've cleared our conversation history and my saved news selection for this session."
         elif intent == "cancel":
             self.pending_intent = None
             response = "No problem — cancelled. What would you like to do instead?"
         elif intent == "weather":
             location = self._weather_location(original_message)
+            if not location and re.match(r"^(?:and\s+)?what about\s+", normalised):
+                location = re.sub(
+                    r"^(?:and\s+)?what about\s+", "", original_message, flags=re.IGNORECASE
+                ).strip(" .?!")
             if not location and self.pending_intent == "weather":
                 location = self._clean_follow_up_location(original_message)
 
@@ -225,6 +235,7 @@ class DeskRobot:
                 try:
                     report = self.weather_provider.fetch_current(location)
                     self.last_weather_report = report
+                    self.last_weather_location = location
                     self._set_capability_status(Capability.WEATHER, CapabilityStatus.AVAILABLE)
                     self._emit_event(
                         RobotEventType.WEATHER_LOOKUP_SUCCEEDED,
