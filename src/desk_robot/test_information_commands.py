@@ -69,12 +69,16 @@ def test_weather_provider_error_is_reported() -> None:
     assert "Nowhere" in response
 
 
-def test_news_command_returns_real_provider_articles() -> None:
-    response = make_robot().respond("latest news")
+def test_news_command_caches_real_provider_articles_and_returns_a_compact_summary() -> None:
+    robot = make_robot()
+    response = robot.respond("latest news")
 
-    assert "Test News" in response
-    assert "Example headline" in response
-    assert "https://example.com/news" in response
+    assert "1 headlines" in response
+    assert "Example headline" not in response
+    assert robot.last_news_report is not None
+    assert robot.last_news_report.articles[0].source == "Test News"
+    assert robot.last_news_report.articles[0].title == "Example headline"
+    assert robot.last_news_report.articles[0].url == "https://example.com/news"
 
 
 def test_existing_recall_still_works() -> None:
