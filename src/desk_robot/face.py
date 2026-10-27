@@ -562,13 +562,11 @@ class DeboFace:
             if kind == "wake":
                 self._cancel_idle_callback()
                 if not self.busy:
+                    # Show the listening pose immediately when the wake phrase
+                    # is confirmed; do not spend its short visible window in a
+                    # separate surprised animation.
                     self.set_state("listening")
-                    self.show_expression("surprised", 0.18)
-                    self.root.after(
-                        520,
-                        lambda: self.show_expression("listening", 0.22)
-                        if not self.closed and not self.busy else None,
-                    )
+                    self.show_expression("listening", 0.22)
                     self.response_label.configure(text="I'm listening — go ahead!")
                     self.sound.play("curious")
                 continue
@@ -596,7 +594,17 @@ class DeboFace:
                         self.set_state("idle")
                     continue
                 self.busy = False
-                self.submit_message(transcript)
+                if self.state == "listening":
+                    # The wake and command events can arrive in the same GUI
+                    # poll. Briefly hold the listening pose so it is actually
+                    # rendered before the response/thinking animation replaces it.
+                    self.root.after(
+                        450,
+                        lambda text=transcript: self.submit_message(text)
+                        if not self.closed else None,
+                    )
+                else:
+                    self.submit_message(transcript)
                 continue
 
             self.response = result
