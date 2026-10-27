@@ -37,6 +37,9 @@ class DeskRobot:
         self.news_provider = (
             news_provider if news_provider is not None else RssNewsProvider()
         )
+        self.last_weather_report = None
+        self.last_news_report = None
+        self.last_intent = "unknown"
 
     def respond(self, message: str) -> str:
         original_message = message.strip()
@@ -47,6 +50,9 @@ class DeskRobot:
 
         self.state.turns += 1
         previous_message = self.context.last_user_message
+        self.last_weather_report = None
+        self.last_news_report = None
+        self.last_intent = "unknown"
 
         intent = "unknown"
 
@@ -73,6 +79,8 @@ class DeskRobot:
         elif self._is_news_request(normalised):
             intent = "news"
 
+        self.last_intent = intent
+
         if intent == "weather":
             location = self._weather_location(original_message)
 
@@ -84,6 +92,7 @@ class DeskRobot:
             else:
                 try:
                     report = self.weather_provider.fetch_current(location)
+                    self.last_weather_report = report
                     response = (
                         f"Here's the current weather for {report.location}: "
                         f"{report.condition}, {report.temperature_c:.1f}°C. "
@@ -100,6 +109,7 @@ class DeskRobot:
         elif intent == "news":
             try:
                 report = self.news_provider.fetch_latest(limit=5)
+                self.last_news_report = report
                 lines = [f"Here are the latest headlines from {report.provider}:"]
                 for index, article in enumerate(report.articles, start=1):
                     lines.append(f"{index}. {article.title} — {article.url}")
