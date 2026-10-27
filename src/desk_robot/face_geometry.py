@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+
 def blend(foreground: str, background: str, amount: float) -> str:
     """Blend hex colours; amount 0 is background, 1 is foreground."""
     amount = max(0.0, min(1.0, amount))
