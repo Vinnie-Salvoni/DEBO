@@ -86,9 +86,17 @@ class SpeechSynthesizer:
     def _select_english_voice(engine) -> None:
         try:
             voices = engine.getProperty("voices") or []
-            for voice in voices:
-                descriptor = f"{getattr(voice, 'id', '')} {getattr(voice, 'name', '')}".lower()
-                if any(code in descriptor for code in ("en-gb", "english", "en_us", "en-us")):
+            descriptors = [
+                (voice, f"{getattr(voice, 'id', '')} {getattr(voice, 'name', '')}".lower())
+                for voice in voices
+            ]
+            preferred_markers = ("engb", "en-gb", "en_gb", "british", "united kingdom")
+            for voice, descriptor in descriptors:
+                if any(marker in descriptor for marker in preferred_markers):
+                    engine.setProperty("voice", voice.id)
+                    return
+            for voice, descriptor in descriptors:
+                if "english" in descriptor or "en-us" in descriptor or "en_us" in descriptor:
                     engine.setProperty("voice", voice.id)
                     return
         except Exception:
