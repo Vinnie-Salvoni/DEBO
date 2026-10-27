@@ -24,7 +24,7 @@ from desk_robot.face_geometry import (
     morph_shape,
     smoothstep,
 )
-from desk_robot.face_settings import DEFAULT_SETTINGS as DEFAULT_SETTINGS
+from desk_robot.face_settings import DEFAULT_SETTINGS  # noqa: F401
 from desk_robot.face_settings import load_settings, save_settings
 from desk_robot.robot import DeskRobot
 from desk_robot.sound import SoundManager
