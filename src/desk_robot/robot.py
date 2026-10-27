@@ -116,8 +116,8 @@ class DeskRobot:
 
         intent = "unknown"
 
-        if self.pending_intent == "weather" and not self._is_weather_request(normalised):
-            intent = "weather"
+        if normalised in {"cancel", "cancel that", "never mind", "nevermind", "forget it", "stop", "don't worry", "dont worry"}:
+            intent = "cancel"
         elif normalised in {"hello", "hi", "hey", "hello robot"}:
             intent = "greeting"
         elif "your name" in normalised or "what is your name" in normalised:
@@ -145,9 +145,18 @@ class DeskRobot:
         elif self._is_news_request(normalised):
             intent = "news"
 
+        if intent == "unknown" and self.pending_intent == "weather":
+            if self._clean_follow_up_location(original_message):
+                intent = "weather"
+            else:
+                self.pending_intent = None
+
         self.last_intent = intent
 
-        if intent == "weather":
+        if intent == "cancel":
+            self.pending_intent = None
+            response = "No problem — cancelled. What would you like to do instead?"
+        elif intent == "weather":
             location = self._weather_location(original_message)
             if not location and self.pending_intent == "weather":
                 location = self._clean_follow_up_location(original_message)
@@ -274,6 +283,10 @@ class DeskRobot:
             ))
         )
 
+    def cancel_pending_intent(self) -> None:
+        """Clear an unfinished clarification when its voice window expires."""
+        self.pending_intent = None
+
     @staticmethod
     def _clean_follow_up_location(message: str) -> str | None:
         location = message.strip(" .,!?:;")
@@ -281,7 +294,16 @@ class DeskRobot:
             r"^(?:it's|it is|in|for|around|near|the weather in|check|try|use)\s+",
             "", location, flags=re.IGNORECASE,
         )
-        if not location or location.lower() in {"there", "here", "that place", "anywhere"}:
+        lowered = location.lower()
+        if (
+            not location
+            or lowered in {"there", "here", "that place", "anywhere"}
+            or len(location.split()) > 6
+            or re.search(
+                r"\b(i|i'm|i am|you|we|they|he|she|it|what|why|how|can|could|would|please|tell|show|help|cancel|stop|thanks|thank)\b",
+                lowered,
+            )
+        ):
             return None
         return location
 

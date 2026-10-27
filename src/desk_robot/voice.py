@@ -155,10 +155,12 @@ class VoiceController:
                 chunk = self._audio_queue.get(timeout=0.2)
             except queue.Empty:
                 self._expire_wake_window()
+                self._expire_follow_up_window()
                 continue
             if chunk is None:
                 break
             self._expire_wake_window()
+            self._expire_follow_up_window()
             loud = self._rms(chunk) >= ENERGY_THRESHOLD
             if not speech_started:
                 pre_roll.append(chunk)
@@ -181,6 +183,11 @@ class VoiceController:
         if self._wake_until and time.monotonic() > self._wake_until:
             self._wake_until = 0.0
             self._emit("standby", "")
+
+    def _expire_follow_up_window(self) -> None:
+        if self._followup_until and time.monotonic() > self._followup_until:
+            self._followup_until = 0.0
+            self._emit("followup_timeout", "I didn't hear a location, so I've cancelled that request.")
 
     def _process_utterance(self, audio: bytes) -> None:
         if not self._model_ready.is_set() or self._closed:
@@ -230,7 +237,7 @@ class VoiceController:
                 self._emit("transcript", command)
             return
         if self._followup_until and now > self._followup_until:
-            self._followup_until = 0.0
+            self._expire_follow_up_window()
         if self._wake_until and now <= self._wake_until:
             self._wake_until = 0.0
             command = transcript.strip()

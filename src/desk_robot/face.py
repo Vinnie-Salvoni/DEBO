@@ -536,6 +536,14 @@ class DeboFace:
                     self.set_state("listening")
                 continue
 
+            if kind == "followup_timeout":
+                self.robot.cancel_pending_intent()
+                if not self.busy:
+                    self.response_label.configure(text=result)
+                    self.status.configure(text="WAITING FOR HEY DEBO", fg=self.current_accent())
+                    self.return_to_idle()
+                continue
+
             if kind == "standby":
                 if not self.busy and self.state == "listening":
                     self.return_to_idle()

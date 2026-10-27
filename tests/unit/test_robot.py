@@ -281,6 +281,39 @@ def test_weather_follow_up_uses_the_clarification_context() -> None:
     assert "14.5°C" in answer
 
 
+def test_weather_follow_up_can_be_cancelled_without_using_cancel_as_a_location() -> None:
+    robot = make_information_robot()
+    robot.respond("give me the weather")
+
+    response = robot.respond("never mind")
+
+    assert robot.pending_intent is None
+    assert robot.last_weather_report is None
+    assert "cancelled" in response.lower()
+
+
+def test_weather_follow_up_does_not_consume_a_new_command() -> None:
+    robot = make_information_robot()
+    robot.respond("give me the weather")
+
+    response = robot.respond("hello")
+
+    assert robot.pending_intent is None
+    assert robot.last_weather_report is None
+    assert "Debo" in response
+
+
+def test_weather_follow_up_rejects_a_full_sentence_as_a_location() -> None:
+    robot = make_information_robot()
+    robot.respond("give me the weather")
+
+    response = robot.respond("I saw a bird today")
+
+    assert robot.pending_intent is None
+    assert robot.last_weather_report is None
+    assert "Tell me more" in response
+
+
 def test_weather_follow_up_accepts_natural_location_phrasing() -> None:
     robot = make_information_robot()
     robot.respond("what's it like outside?")

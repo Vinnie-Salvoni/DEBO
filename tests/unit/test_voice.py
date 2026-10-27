@@ -130,3 +130,16 @@ def test_follow_up_window_is_bounded() -> None:
     voice.listen_for_follow_up(500)
     assert voice._followup_until > 0
     assert voice._wake_until == 0.0
+
+
+def test_expired_follow_up_emits_timeout_and_clears_window(monkeypatch) -> None:
+    voice = VoiceController()
+    events: list[tuple[str, str]] = []
+    voice._event_callback = lambda kind, text: events.append((kind, text))
+    voice._followup_until = 1.0
+    monkeypatch.setattr("desk_robot.voice.time.monotonic", lambda: 2.0)
+
+    voice._expire_follow_up_window()
+
+    assert voice._followup_until == 0.0
+    assert events and events[-1][0] == "followup_timeout"
