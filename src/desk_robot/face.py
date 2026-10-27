@@ -19,6 +19,7 @@ from tkinter import colorchooser, ttk
 
 from desk_robot.robot import DeskRobot
 from desk_robot.sound import SoundManager
+from desk_robot.speech import SpeechSynthesizer
 from desk_robot.voice import VoiceController, VoiceError
 
 SETTINGS_PATH = Path.home() / ".debo_face_settings.json"
@@ -34,8 +35,11 @@ DEFAULT_SETTINGS = {
     "automatic_accents": True,
     "sound_enabled": True,
     "sound_volume": 55,
+    "speech_enabled": True,
+    "speech_volume": 85,
+    "speech_rate": 178,
 }
-COLOUR_TRANSITION_SECONDS = 0.75
+COLOUR_TRANSITION_SECONDS = 0.34
 GAZE_MIN_INTERVAL = 2.2
 GAZE_MAX_INTERVAL = 4.0
 FRAME_MS = 16
@@ -54,7 +58,9 @@ def load_settings() -> dict:
         settings["glow"] = max(0, min(100, int(settings["glow"])))
         settings["animation_speed"] = max(0.5, min(2.0, float(settings["animation_speed"])))
         settings["sound_volume"] = max(0, min(100, int(settings["sound_volume"])))
-        for key in ("automatic_accents", "sound_enabled"):
+        settings["speech_volume"] = max(0, min(100, int(settings["speech_volume"])))
+        settings["speech_rate"] = max(120, min(230, int(settings["speech_rate"])))
+        for key in ("automatic_accents", "sound_enabled", "speech_enabled"):
             settings[key] = bool(settings[key])
         for key in ("eye_color", "accent_color"):
             value = str(settings[key])
@@ -301,6 +307,12 @@ class DeboFace:
             volume=self.settings["sound_volume"] / 100,
         )
         self.voice = VoiceController()
+        self.speech = SpeechSynthesizer(
+            enabled=self.settings["speech_enabled"],
+            volume=self.settings["speech_volume"] / 100,
+            rate=self.settings["speech_rate"],
+        )
+        self.speech_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="debo-speech")
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="debo-brain")
         self.results: queue.Queue[tuple[str, str, int]] = queue.Queue()
 
@@ -389,12 +401,15 @@ class DeboFace:
                                        highlightthickness=0, bd=0)
         self.ticker_canvas.pack(fill="x")
         self._ticker_text = ""
+        self._ticker_items: list[str] = []
+        self._ticker_index = 0
+        self._ticker_hold_until = 0.0
         self._ticker_item = self.ticker_canvas.create_text(
             0, 15, text="", anchor="w", fill="#C8E8F4",
             font=("Segoe UI", 10, "bold"),
         )
         self._ticker_x = 0.0
-        self._ticker_speed = 1.25
+        self._ticker_speed = 2.0
         self.next_story_button = tk.Button(
             self.info_panel, text="NEXT STORY  →", command=lambda: self.submit_message("next story"),
             bg="#12313A", fg="#D9FFFF", activebackground="#1B4C58",
@@ -439,18 +454,20 @@ class DeboFace:
         except (AttributeError, RuntimeError):
             pass
         self.voice.close()
+        self.speech.close()
+        self.speech_executor.shutdown(wait=False, cancel_futures=True)
         self.executor.shutdown(wait=False, cancel_futures=True)
         try:
             self.root.destroy()
         except tk.TclError:
             pass
 
-    def _set_expression(self, state: str, duration: float = 0.32) -> None:
+    def _set_expression(self, state: str, duration: float = 0.16) -> None:
         """Begin a single cancellable morph from the currently displayed geometry."""
         target = EXPRESSIONS.get(state, EXPRESSIONS["idle"])
         self._set_expression_shapes(target, duration)
 
-    def show_expression(self, name: str, duration: float = 0.28) -> bool:
+    def show_expression(self, name: str, duration: float = 0.15) -> bool:
         """Morph to any expression from the project's Cozmo reference sheet.
 
         Names accept either preset keys (``sad_down``) or human-readable labels
@@ -469,12 +486,12 @@ class DeboFace:
         self._expression_from = self._current_shapes()
         self._expression_to = target
         self._expression_started = self.time
-        self._expression_duration = max(0.01, duration / self._speed())
+        self._expression_duration = max(0.075, duration / self._speed())
 
     def set_state(self, state: str) -> None:
         if state == self.state:
             return
-        self._set_expression(state, 0.34 if state in {"happy", "thinking"} else 0.28)
+        self._set_expression(state, 0.18 if state in {"happy", "thinking"} else 0.12)
         self.state = state
         if state == "idle":
             self._idle_since = self.time
@@ -591,7 +608,7 @@ class DeboFace:
                     # is confirmed; do not spend its short visible window in a
                     # separate surprised animation.
                     self.set_state("listening")
-                    self.show_expression("listening", 0.22)
+                    self.show_expression("listening", 0.10)
                     self.response_label.configure(text="I'm listening — go ahead!")
                     self.sound.play("curious")
                 continue
