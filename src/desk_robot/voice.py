@@ -531,21 +531,26 @@ class VoiceController:
                     getattr(selected, "name", "system default"),
                 )
 
-                stage = "engine.say"
+                stage = "engine.render"
                 delivered_text = self._robotic_delivery(text)
+                with tempfile.NamedTemporaryFile(
+                    prefix="debo_tts_", suffix=".wav", delete=False
+                ) as audio_file:
+                    audio_path = Path(audio_file.name)
+                audio_path.unlink(missing_ok=True)
+
                 logger.info(
-                    "TTS stage=say: submitting %d characters to a fresh engine",
+                    "TTS stage=render: rendering %d characters to a temporary WAV",
                     len(delivered_text),
                 )
-                engine.say(delivered_text)
-
-                stage = "engine.runAndWait"
-                logger.info("TTS stage=playback: waiting for engine completion")
+                engine.save_to_file(delivered_text, str(audio_path))
                 engine.runAndWait()
-                logger.info(
-                    "TTS stage=playback: engine returned; audible output still "
-                    "needs to be verified on the device"
-                )
+
+                stage = "audio.playback"
+                logger.info("TTS stage=playback: applying robot effect and playing WAV")
+                self._play_robot_voice_file(audio_path)
+                logger.info("TTS stage=playback: output stream completed")
+                audio_path.unlink(missing_ok=True)
             except Exception as error:
                 logger.exception("TTS failed at stage=%s", stage)
                 self._emit(
@@ -553,6 +558,11 @@ class VoiceController:
                     f"TTS failed at {stage} ({type(error).__name__}): {error}",
                 )
             finally:
+                if "audio_path" in locals():
+                    try:
+                        audio_path.unlink(missing_ok=True)
+                    except OSError:
+                        logger.debug("Could not remove temporary TTS WAV", exc_info=True)
                 if engine is not None:
                     try:
                         engine.stop()
@@ -562,6 +572,41 @@ class VoiceController:
                 self._finish_speech_item()
 
         logger.info("TTS worker stopped")
+
+    @staticmethod
+    def _play_robot_voice_file(path: Path) -> None:
+        """Play rendered speech with a subtle electronic, robot-like timbre."""
+        import numpy as np
+        import sounddevice as sd
+
+        with wave.open(str(path), "rb") as source:
+            channels = source.getnchannels()
+            sample_width = source.getsampwidth()
+            sample_rate = source.getframerate()
+            raw_audio = source.readframes(source.getnframes())
+
+        if sample_width != 2:
+            raise VoiceError(
+                f"Speech renderer produced {sample_width * 8}-bit audio; expected 16-bit PCM."
+            )
+
+        samples = np.frombuffer(raw_audio, dtype="<i2")
+        if channels > 1:
+            samples = samples.reshape(-1, channels)
+        audio = samples.astype(np.float32) / 32768.0
+
+        # A restrained 32 Hz amplitude modulation adds an electronic edge
+        # without destroying speech intelligibility. This is an original robot
+        # effect, not an attempt to reproduce a specific character's voice.
+        frame_count = len(audio)
+        modulation = 0.84 + 0.16 * np.sin(
+            2.0 * np.pi * 32.0 * np.arange(frame_count, dtype=np.float32) / sample_rate
+        )
+        if audio.ndim > 1:
+            modulation = modulation[:, None]
+        effected = np.tanh(audio * modulation * 1.12)
+        effected = np.clip(effected, -1.0, 1.0)
+        sd.play(effected, samplerate=sample_rate, blocking=True)
 
     @staticmethod
     def _choose_robot_voice(voices):
