@@ -80,3 +80,35 @@ def test_empty_news_result_is_representable() -> None:
     )
 
     assert report.articles == ()
+
+
+
+def test_weather_report_can_expose_daily_forecast_without_inventing_missing_values() -> None:
+    report = WeatherReport(
+        location="London",
+        temperature_c=14.5,
+        condition="Cloudy",
+        provider="FakeWeather",
+        fetched_at=datetime(2026, 10, 26, 12, 0, tzinfo=UTC),
+        daily_high_c=17.0,
+        daily_low_c=9.0,
+        forecast_condition="Rain showers",
+    )
+
+    assert report.daily_high_c == 17.0
+    assert report.daily_low_c == 9.0
+    assert report.forecast_condition == "Rain showers"
+
+
+def test_daily_forecast_fields_are_optional() -> None:
+    report = WeatherReport(
+        location="London",
+        temperature_c=14.5,
+        condition="Cloudy",
+        provider="FakeWeather",
+        fetched_at=datetime(2026, 10, 26, 12, 0, tzinfo=UTC),
+    )
+
+    assert report.daily_high_c is None
+    assert report.daily_low_c is None
+    assert report.forecast_condition is None
