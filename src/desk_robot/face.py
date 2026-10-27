@@ -14,6 +14,7 @@ import tkinter as tk
 from concurrent.futures import Future, ThreadPoolExecutor
 from tkinter import colorchooser, ttk
 
+from desk_robot.core.events import RobotEvent, RobotEventType
 from desk_robot.face_geometry import (
     EXPRESSION_ALIASES,
     EXPRESSION_PRESETS,
@@ -24,7 +25,6 @@ from desk_robot.face_geometry import (
     morph_shape,
     smoothstep,
 )
-from desk_robot.core.events import RobotEvent, RobotEventType
 from desk_robot.face_settings import (
     DEFAULT_SETTINGS,  # noqa: F401
     load_settings,
@@ -492,9 +492,8 @@ class DeboFace:
             elif event.type in {
                 RobotEventType.WEATHER_LOOKUP_FAILED,
                 RobotEventType.NEWS_LOOKUP_FAILED,
-            }:
-                if self.busy:
-                    self.show_expression("concerned", 0.18)
+            } and self.busy:
+                self.show_expression("concerned", 0.18)
 
     def _collect_result(self, future: Future[str], request_id: int) -> None:
         """Worker callback: queue results only; never call Tk from this thread."""
