@@ -197,7 +197,7 @@ class VoiceController:
         except VoiceError as error:
             self._emit("transcription_error", str(error))
             return
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001
             self._emit("transcription_error", f"Audio transcription failed ({type(error).__name__}): {error}")
             return
         finally:
@@ -310,12 +310,12 @@ class VoiceController:
         if stream is not None:
             try:
                 stream.stop()
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                logger.debug("Microphone stream stop failed during shutdown", exc_info=True)
             try:
                 stream.close()
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                logger.debug("Microphone stream close failed during shutdown", exc_info=True)
         try:
             self._audio_queue.put_nowait(None)
         except queue.Full:
