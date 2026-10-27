@@ -76,6 +76,7 @@ class DeboFace:
         self.idle_callback: str | None = None
         self._request_id = 0
         self._active_future: Future[str] | None = None
+        self._follow_up_after_speech = False
         self._expression_started = 0.0
         self._expression_from = EXPRESSIONS["idle"]
         self._expression_to = EXPRESSIONS["idle"]
@@ -529,9 +530,16 @@ class DeboFace:
                     self.sound.play("curious")
                 continue
 
+            if kind == "followup_listening":
+                if not self.busy:
+                    self.status.configure(text="LISTENING FOR YOUR ANSWER", fg=self.current_accent())
+                    self.set_state("listening")
+                continue
+
             if kind == "standby":
                 if not self.busy and self.state == "listening":
                     self.return_to_idle()
+                    self.status.configure(text="WAITING FOR HEY DEBO", fg=self.current_accent())
                 continue
 
             if kind == "voice_error":
@@ -548,7 +556,14 @@ class DeboFace:
                 continue
 
             if kind == "speech_done":
-                if not self.busy:
+                if self._follow_up_after_speech:
+                    self._follow_up_after_speech = False
+                    self.voice.listen_for_follow_up()
+                    self.status.configure(text="LISTENING FOR YOUR ANSWER", fg=self.current_accent())
+                    self.set_state("listening")
+                    self.show_expression("listening", 0.12)
+                    self.response_label.configure(text="Go ahead — I'm listening.")
+                elif not self.busy:
                     self.set_state("happy")
                     self._happy_until = self.time + 0.55
                 continue
@@ -583,6 +598,13 @@ class DeboFace:
                 self._present_latest_information()
                 story_text = getattr(self.robot, "last_story_text", None)
                 speech_text = story_text if story_text else result
+                if getattr(self.robot, "pending_intent", None):
+                    if self.settings.get("speech_enabled", True) and speech_text:
+                        self._follow_up_after_speech = True
+                    else:
+                        self.voice.listen_for_follow_up()
+                        self.status.configure(text="LISTENING FOR YOUR ANSWER", fg=self.current_accent())
+                        self.set_state("listening")
                 if self.settings.get("speech_enabled", True) and speech_text:
                     self.speech_executor.submit(self._speak_text, speech_text)
             elif getattr(self.robot, "last_intent", "") in {"weather", "news", "next_news", "full_story"}:

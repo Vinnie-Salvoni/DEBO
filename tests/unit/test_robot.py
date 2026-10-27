@@ -267,3 +267,39 @@ def test_full_story_request_reads_the_currently_selected_article() -> None:
     assert "Second real headline" in response
     assert robot.last_story_text is not None
     assert robot.last_story_text.startswith("Second real headline. Full story text for Second real headline")
+
+
+def test_weather_follow_up_uses_the_clarification_context() -> None:
+    robot = make_information_robot()
+    question = robot.respond("give me the weather")
+    assert "where should i check" in question.lower()
+    assert robot.pending_intent == "weather"
+    answer = robot.respond("London")
+    assert robot.pending_intent is None
+    assert robot.last_weather_report is not None
+    assert robot.last_weather_report.location == "London, UK"
+    assert "14.5°C" in answer
+
+
+def test_weather_follow_up_accepts_natural_location_phrasing() -> None:
+    robot = make_information_robot()
+    robot.respond("what's it like outside?")
+    answer = robot.respond("around Manchester")
+    assert robot.last_weather_report is not None
+    assert robot.last_weather_report.location == "Manchester, UK"
+    assert "14.5°C" in answer
+
+
+def test_weather_language_recognises_everyday_phrasing() -> None:
+    robot = make_information_robot()
+    response = robot.respond("Do I need an umbrella in London")
+    assert robot.last_weather_report is not None
+    assert robot.last_weather_report.location == "London, UK"
+    assert "14.5°C" in response
+
+
+def test_news_language_recognises_world_events_phrasing() -> None:
+    robot = make_information_robot()
+    response = robot.respond("What's going on in the world?")
+    assert robot.last_news_report is not None
+    assert "2 headlines" in response

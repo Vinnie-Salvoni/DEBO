@@ -52,6 +52,7 @@ class VoiceController:
         self._model_error: str | None = None
         self._event_callback = None
         self._wake_until = 0.0
+        self._followup_until = 0.0
 
     @property
     def listening(self) -> bool:
@@ -221,7 +222,16 @@ class VoiceController:
                 self._wake_until = 0.0
                 self._emit("transcript", remainder)
             return
-        if self._wake_until and time.monotonic() <= self._wake_until:
+        now = time.monotonic()
+        if self._followup_until and now <= self._followup_until:
+            self._followup_until = 0.0
+            command = transcript.strip()
+            if command:
+                self._emit("transcript", command)
+            return
+        if self._followup_until and now > self._followup_until:
+            self._followup_until = 0.0
+        if self._wake_until and now <= self._wake_until:
             self._wake_until = 0.0
             command = transcript.strip()
             if command:
@@ -289,6 +299,14 @@ class VoiceController:
                 return
 
 
+    def listen_for_follow_up(self, seconds: float = 12.0) -> None:
+        """Accept one answer without a wake phrase after DEBO asks a question."""
+        if self._closed:
+            return
+        self._wake_until = 0.0
+        self._followup_until = time.monotonic() + max(1.0, min(30.0, seconds))
+        self._emit("followup_listening", "I'm listening for your answer.")
+
     def pause(self) -> None:
         """Temporarily ignore microphone audio while DEBO speaks to prevent feedback."""
         self._paused = True
@@ -306,6 +324,7 @@ class VoiceController:
             return
         self._closed = True
         self._listening = False
+        self._followup_until = 0.0
         stream, self._stream = self._stream, None
         if stream is not None:
             try:

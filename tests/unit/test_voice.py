@@ -110,3 +110,23 @@ def test_microphone_pause_suppresses_playback_audio_and_resume_restores_input() 
     voice.resume()
     voice._audio_callback(AudioFrame(), 8, None, None)
     assert voice._audio_queue.get_nowait() == b"\\x01\\x00" * 8
+
+
+def test_follow_up_utterance_is_accepted_without_wake_phrase() -> None:
+    import time
+    voice = VoiceController()
+    voice._model_ready.set()
+    voice._followup_until = time.monotonic() + 10
+    voice._transcribe_file = lambda _path: "Manchester"  # type: ignore[method-assign]
+    events: list[tuple[str, str]] = []
+    voice._event_callback = lambda kind, text: events.append((kind, text))
+    voice._process_utterance(b"\\x00\\x00" * 160)
+    assert events == [("transcript", "Manchester")]
+    assert voice._followup_until == 0.0
+
+
+def test_follow_up_window_is_bounded() -> None:
+    voice = VoiceController()
+    voice.listen_for_follow_up(500)
+    assert voice._followup_until > 0
+    assert voice._wake_until == 0.0

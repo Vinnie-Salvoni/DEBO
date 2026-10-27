@@ -1,4 +1,5 @@
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -63,6 +64,7 @@ class DeskRobot:
         self.news_cache = None
         self.last_news_index = 0
         self.last_story_text: str | None = None
+        self.pending_intent: str | None = None
 
     def _emit_event(
         self,
@@ -114,7 +116,9 @@ class DeskRobot:
 
         intent = "unknown"
 
-        if normalised in {"hello", "hi", "hey", "hello robot"}:
+        if self.pending_intent == "weather" and not self._is_weather_request(normalised):
+            intent = "weather"
+        elif normalised in {"hello", "hi", "hey", "hello robot"}:
             intent = "greeting"
         elif "your name" in normalised or "what is your name" in normalised:
             intent = "name"
@@ -145,13 +149,14 @@ class DeskRobot:
 
         if intent == "weather":
             location = self._weather_location(original_message)
+            if not location and self.pending_intent == "weather":
+                location = self._clean_follow_up_location(original_message)
 
             if not location:
-                response = (
-                    "Which location would you like the weather for? "
-                    "For example, weather in London."
-                )
+                self.pending_intent = "weather"
+                response = "Where should I check? Tell me a city or town, and I'll get the weather."
             else:
+                self.pending_intent = None
                 self._emit_event(
                     RobotEventType.WEATHER_LOOKUP_STARTED, message="Retrieving current weather."
                 )
@@ -248,20 +253,37 @@ class DeskRobot:
 
     @staticmethod
     def _is_weather_request(message: str) -> bool:
-        return any(word in message for word in ("weather", "temperature", "forecast"))
+        text = message.lower().strip()
+        return bool(
+            re.search(r"\b(weather|temperature|forecast|rain|raining|sunny|windy)\b", text)
+            or any(phrase in text for phrase in (
+                "will it rain", "is it cold", "is it hot", "what's it like outside",
+                "what is it like outside", "do i need an umbrella",
+            ))
+        )
 
     @staticmethod
     def _is_news_request(message: str) -> bool:
-        return any(
-            phrase in message
-            for phrase in (
-                "news",
-                "headlines",
-                "latest stories",
-                "what's happening",
-                "what is happening",
-            )
+        text = message.lower().strip()
+        return bool(
+            re.search(r"\b(news|headlines|current events)\b", text)
+            or any(phrase in text for phrase in (
+                "latest stories", "what's happening", "what is happening",
+                "what's going on in the world", "anything happening today",
+                "tell me what's going on",
+            ))
         )
+
+    @staticmethod
+    def _clean_follow_up_location(message: str) -> str | None:
+        location = message.strip(" .,!?:;")
+        location = re.sub(
+            r"^(?:it's|it is|in|for|around|near|the weather in|check|try|use)\s+",
+            "", location, flags=re.IGNORECASE,
+        )
+        if not location or location.lower() in {"there", "here", "that place", "anywhere"}:
+            return None
+        return location
 
     @staticmethod
     def _weather_location(message: str) -> str | None:
