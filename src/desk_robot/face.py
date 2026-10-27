@@ -636,7 +636,7 @@ class DeboFace:
             elif "normal" in text:
                 speed = 1.0
             else:
-                match = re.search(r"(?:to\\s+)?([0-9]+(?:\\.[0-9]+)?)", text)
+                match = re.search(r"(?:to\s+)?([0-9]+(?:\.[0-9]+)?)", text)
                 if not match:
                     return "Say animation speed fast, normal, slow, or a number from 0.5 to 2."
                 speed = float(match.group(1))
