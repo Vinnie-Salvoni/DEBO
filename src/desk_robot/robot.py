@@ -40,6 +40,8 @@ class DeskRobot:
         self.last_weather_report = None
         self.last_news_report = None
         self.last_intent = "unknown"
+        self.news_cache = None
+        self.last_news_index = 0
 
     def respond(self, message: str) -> str:
         original_message = message.strip()
@@ -76,6 +78,8 @@ class DeskRobot:
             intent = "help"
         elif self._is_weather_request(normalised):
             intent = "weather"
+        elif any(phrase in normalised for phrase in ("next story", "another story", "next headline")):
+            intent = "next_news"
         elif self._is_news_request(normalised):
             intent = "news"
 
@@ -110,12 +114,23 @@ class DeskRobot:
             try:
                 report = self.news_provider.fetch_latest(limit=5)
                 self.last_news_report = report
-                lines = [f"Here are the latest headlines from {report.provider}:"]
-                for index, article in enumerate(report.articles, start=1):
-                    lines.append(f"{index}. {article.title} — {article.url}")
-                response = "\n".join(lines)
+                self.news_cache = report
+                self.last_news_index = 0
+                if report.articles:
+                    response = f"I've found {len(report.articles)} headlines. Want the next story?"
+                else:
+                    response = "The news feed returned no headlines."
             except InformationError as error:
                 response = str(error)
+
+        elif intent == "next_news":
+            if self.news_cache and self.news_cache.articles:
+                self.last_news_report = self.news_cache
+                self.last_news_index = (self.last_news_index + 1) % len(self.news_cache.articles)
+                article = self.news_cache.articles[self.last_news_index]
+                response = f"Story {self.last_news_index + 1} of {len(self.news_cache.articles)}: {article.title}"
+            else:
+                response = "Ask me for the news first, and I'll find a story for you."
 
         else:
             response = self.personality.respond(
