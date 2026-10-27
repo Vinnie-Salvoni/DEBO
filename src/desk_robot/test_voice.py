@@ -88,3 +88,6 @@ def test_voice_controller_contains_input_only_no_speech_synthesis() -> None:
     assert "pyttsx3" not in source
     assert "_speech_queue" not in source
     assert "_play_robot_voice_file" not in source
+    sound_source = Path(__file__).with_name("sound.py").read_text(encoding="utf-8")
+    assert "def speak(" not in sound_source
+    assert "text-to-speech" not in sound_source.lower()
