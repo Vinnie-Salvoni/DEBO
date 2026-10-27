@@ -272,7 +272,7 @@ def test_full_story_request_reads_the_currently_selected_article() -> None:
 def test_weather_follow_up_uses_the_clarification_context() -> None:
     robot = make_information_robot()
     question = robot.respond("give me the weather")
-    assert "where should i check" in question.lower()
+    assert "which location" in question.lower()
     assert robot.pending_intent == "weather"
     answer = robot.respond("London")
     assert robot.pending_intent is None
