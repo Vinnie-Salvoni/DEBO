@@ -266,4 +266,4 @@ def test_full_story_request_reads_the_currently_selected_article() -> None:
     assert robot.last_intent == "full_story"
     assert "Second real headline" in response
     assert robot.last_story_text is not None
-    assert robot.last_story_text.startswith("Full story text for Second real headline")
+    assert robot.last_story_text.startswith("Second real headline. Full story text for Second real headline")
