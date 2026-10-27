@@ -203,7 +203,7 @@ Invalid values raise a configuration error. Existing face preferences are stored
 - Session conversation context is bounded and temporary; it is not long-term personal memory.
 - Weather uses Open-Meteo and news uses RSS. The target-independent robot must eventually prove that it can retrieve information over its own connection with the development laptop powered off and Ollama unavailable.
 - No final robot computer, network transport, display, enclosure, or movement hardware has been selected.
-- The behaviour engine now tracks bounded curiosity, energy, familiarity, interaction count, and intent-aware semantic reactions. It is an initial foundation, not a learned or persistent emotional model.
+- The behaviour engine tracks bounded curiosity, energy, familiarity and interaction count, and selects intent-aware expressions. Greetings can trigger a short electronic chirp when sound effects are enabled. These are deterministic character cues, not a learned or persistent emotional model.
 - Next software stages are to strengthen natural conversation, improve voice turn-taking and latency, evaluate neural TTS, and design user-controlled memory. Hardware and movement come later.
 
 Consult the project roadmap, technology decisions, and brain specification for the fuller requirements and decisions.
