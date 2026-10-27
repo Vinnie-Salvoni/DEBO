@@ -72,7 +72,7 @@ def _parse_datetime(value: str | None) -> datetime | None:
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=UTC)
             return parsed
-        except TypeError, ValueError, OverflowError:
+        except (TypeError, ValueError, OverflowError):
             return None
 
 
