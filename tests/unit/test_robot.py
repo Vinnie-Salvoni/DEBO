@@ -419,3 +419,25 @@ def test_robot_handles_repeat_request_without_previous_answer() -> None:
     response = robot.respond("can you repeat that")
 
     assert "haven't given you an earlier answer" in response
+
+
+def test_news_follow_up_can_ask_for_more_details_naturally() -> None:
+    robot = make_information_robot()
+    robot.respond("show me the news")
+    robot.respond("next story")
+
+    response = robot.respond("tell me more about that")
+
+    assert robot.last_intent == "full_story"
+    assert robot.last_story_text is not None
+    assert "Second real headline" in robot.last_story_text
+    assert "I'll read the full story" in response
+
+
+def test_news_detail_phrases_do_not_trigger_without_a_selected_news_story() -> None:
+    robot = make_information_robot()
+
+    response = robot.respond("tell me more about that")
+
+    assert robot.last_intent == "unknown"
+    assert "Tell me more" in response

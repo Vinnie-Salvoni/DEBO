@@ -163,6 +163,17 @@ class DeskRobot:
             intent = "full_story"
         elif any(phrase in normalised for phrase in ("next story", "another story", "next headline")):
             intent = "next_news"
+        elif self.news_cache and any(
+            phrase in normalised
+            for phrase in (
+                "tell me more",
+                "more details",
+                "expand on that",
+                "tell me more about that",
+                "what happened next",
+            )
+        ):
+            intent = "full_story"
         elif self._is_news_request(normalised):
             intent = "news"
 
