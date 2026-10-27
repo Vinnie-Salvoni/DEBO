@@ -110,7 +110,7 @@ def _weather_condition(code: int) -> str:
 class _ArticleTextParser(HTMLParser):
     """Extract readable paragraph text without a heavyweight scraping dependency."""
 
-    _ignored_tags: ClassVar[frozenset[str]] = frozenset(\n        {"script", "style", "nav", "footer", "header", "aside", "form"}\n    )
+    _ignored_tags: ClassVar[frozenset[str]] = frozenset({"script", "style", "nav", "footer", "header", "aside", "form"})
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
