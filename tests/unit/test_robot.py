@@ -392,3 +392,30 @@ def test_forget_conversation_does_not_clear_history_for_unrelated_phrases() -> N
     robot.respond("I want to forget it was raining")
 
     assert robot.context.last_user_message == "I want to forget it was raining"
+
+
+def test_context_exposes_last_assistant_response() -> None:
+    context = ConversationContext()
+    assert context.last_assistant_response is None
+
+    context.add_turn("Hello", "Hey there!")
+    context.add_turn("How are you?", "I'm feeling curious.")
+
+    assert context.last_assistant_response == "I'm feeling curious."
+
+
+def test_robot_can_repeat_its_previous_answer() -> None:
+    robot = DeskRobot()
+
+    original = robot.respond("hello")
+    repeated = robot.respond("what did you just say?")
+
+    assert original in repeated
+
+
+def test_robot_handles_repeat_request_without_previous_answer() -> None:
+    robot = DeskRobot()
+
+    response = robot.respond("can you repeat that")
+
+    assert "haven't given you an earlier answer" in response

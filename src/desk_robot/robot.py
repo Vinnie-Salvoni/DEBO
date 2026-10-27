@@ -140,6 +140,15 @@ class DeskRobot:
             intent = "thanks"
         elif normalised in {"bye", "goodbye", "exit", "quit"}:
             intent = "farewell"
+        elif any(phrase in normalised for phrase in (
+            "what did you just say",
+            "what were you saying",
+            "what was your last answer",
+            "repeat your last answer",
+            "can you repeat that",
+            "say that again",
+        )):
+            intent = "recall_response"
         elif (
             "what did i just say" in normalised
             or "what did i say" in normalised
@@ -226,6 +235,13 @@ class DeskRobot:
                     )
                     self._emit_event(RobotEventType.WEATHER_LOOKUP_FAILED, message=str(error))
                     response = str(error)
+
+        elif intent == "recall_response":
+            previous_response = self.context.last_assistant_response
+            if previous_response is None:
+                response = "I haven't given you an earlier answer in this session yet."
+            else:
+                response = f'I said: "{previous_response}"'
 
         elif intent == "news":
             self._emit_event(RobotEventType.NEWS_LOOKUP_STARTED, message="Retrieving headlines.")

@@ -29,6 +29,13 @@ class ConversationContext:
             return None
         return self._turns[-1].user_message
 
+    @property
+    def last_assistant_response(self) -> str | None:
+        """Return the most recent assistant response, if one exists."""
+        if not self._turns:
+            return None
+        return self._turns[-1].assistant_response
+
     def add_turn(
         self,
         user_message: str,
