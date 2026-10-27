@@ -569,6 +569,40 @@ class DeboFace:
                 return "Eye colour updated."
             return "Try a colour like blue, teal, purple, pink, green, red, orange, or white."
 
+        if "eye glow" in text or "glow intensity" in text:
+            if "low" in text:
+                glow = 20
+            elif "medium" in text or "normal" in text:
+                glow = 55
+            elif "high" in text or "bright" in text:
+                glow = 85
+            else:
+                match = re.search(r"([0-9]{1,3})", text)
+                if not match:
+                    return "Say eye glow low, medium, high, or a percentage from zero to one hundred."
+                glow = int(match.group(1))
+            self.settings["glow"] = max(0, min(100, glow))
+            save_settings(self.settings)
+            return f"Eye glow set to {self.settings['glow']} percent."
+        if "automatic accents" in text or "activity colours" in text or "activity colors" in text:
+            if any(word in text for word in ("off", "disable", "stop")):
+                enabled = False
+            elif any(word in text for word in ("on", "enable", "start")):
+                enabled = True
+            else:
+                return "Say automatic accents on or automatic accents off."
+            self.settings["automatic_accents"] = enabled
+            save_settings(self.settings)
+            return f"Activity-specific eye colours {'enabled' if enabled else 'disabled'}."
+        if "speech rate" in text or "speaking speed" in text:
+            match = re.search(r"([0-9]{2,3})", text)
+            if not match:
+                return "Say speech rate followed by a number from 120 to 230."
+            rate = max(120, min(230, int(match.group(1))))
+            self.settings["speech_rate"] = rate
+            self.speech.set_rate(rate)
+            save_settings(self.settings)
+            return f"Speech rate set to {rate} words per minute."
         if any(phrase in text for phrase in ("turn sound off", "turn sounds off", "disable sound", "mute sound effects")):
             self.settings["sound_enabled"] = False
             self.sound.set_enabled(False)
@@ -623,7 +657,7 @@ class DeboFace:
             save_settings(self.settings)
             return f"Sound effects volume set to {volume} percent."
         if text in {"settings", "open settings", "show settings", "change settings"}:
-            return "Try saying change my eye colour to blue, animation speed fast, turn sound off, or speech volume 70."
+            return "Try eye colour blue, eye glow high, animation speed fast, automatic accents off, speech rate 170, or speech volume 70."
         return None
 
     def _finish_settings_command(self, response: str) -> None:
