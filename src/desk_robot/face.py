@@ -416,6 +416,13 @@ class DeboFace:
             activeforeground="#FFFFFF", relief="flat", padx=12, pady=6,
             font=("Segoe UI", 9, "bold"), cursor="hand2",
         )
+        self.read_story_button = tk.Button(
+            self.info_panel, text="READ FULL STORY  ▶",
+            command=lambda: self.submit_message("read the full story"),
+            bg="#173047", fg="#D9EDFF", activebackground="#244866",
+            activeforeground="#FFFFFF", relief="flat", padx=12, pady=6,
+            font=("Segoe UI", 9, "bold"), cursor="hand2",
+        )
         self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
         self.info_panel.pack_forget()
         response_panel = tk.Frame(self.root, bg=PANEL, padx=18, pady=14)
@@ -677,20 +684,29 @@ class DeboFace:
     def hide_information(self) -> None:
         self.info_panel.pack_forget()
         self.next_story_button.pack_forget()
+        self.read_story_button.pack_forget()
         self.ticker_canvas.itemconfigure(self._ticker_item, text="")
         self._ticker_text = ""
+        self._ticker_items = []
 
     def show_information_loading(self, kind: str) -> None:
         self.show_expression("curious", 0.24)
         self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
         self.next_story_button.pack_forget()
+        self.read_story_button.pack_forget()
         self.info_title.configure(text=f"{kind.upper()}  /  CONNECTING")
         self.info_main.configure(text="One moment — I'm checking the latest information.")
         self.info_meta.configure(text="Live data · Network requests run in the background")
         self._set_ticker(f"DEBO IS FETCHING {kind.upper()}…")
 
     def _set_ticker(self, text: str) -> None:
-        self._ticker_text = "     •     ".join(part.strip() for part in str(text).splitlines() if part.strip())
+        items = [part.strip() for part in str(text).splitlines() if part.strip()]
+        if len(items) == 1 and "     •     " in items[0]:
+            items = [part.strip() for part in items[0].split("     •     ") if part.strip()]
+        self._ticker_items = items or [""]
+        self._ticker_index = 0
+        self._ticker_hold_until = 0.0
+        self._ticker_text = self._ticker_items[0]
         self._ticker_x = float(self.ticker_canvas.winfo_width() or 700)
         self.ticker_canvas.itemconfigure(self._ticker_item, text=self._ticker_text)
         self.ticker_canvas.coords(self._ticker_item, self._ticker_x, 15)
@@ -698,10 +714,16 @@ class DeboFace:
     def _animate_ticker(self) -> None:
         if not self._ticker_text or not self.info_panel.winfo_ismapped():
             return
+        if self.time < self._ticker_hold_until:
+            return
         self._ticker_x -= self._ticker_speed
         bounds = self.ticker_canvas.bbox(self._ticker_item)
         if bounds and bounds[2] < 0:
+            self._ticker_index = (self._ticker_index + 1) % len(self._ticker_items)
+            self._ticker_text = self._ticker_items[self._ticker_index]
+            self._ticker_hold_until = self.time + 0.28
             self._ticker_x = float(self.ticker_canvas.winfo_width() or 700)
+            self.ticker_canvas.itemconfigure(self._ticker_item, text=self._ticker_text)
         self.ticker_canvas.coords(self._ticker_item, self._ticker_x, 15)
 
     def present_weather(self, report) -> None:
@@ -723,6 +745,7 @@ class DeboFace:
         forecast = f"  ·  Outlook {report.forecast_condition}" if report.forecast_condition else ""
         self.info_meta.configure(text=f"{report.provider}  ·  Observed {observed}  ·  Retrieved {fetched}{high_low}{forecast}")
         self.next_story_button.pack_forget()
+        self.read_story_button.pack_forget()
         ticker = f"CURRENT CONDITIONS  •  {report.location}  •  {condition}  •  {report.temperature_c:.1f}°C"
         if high_low:
             ticker += f"  •  {high_low.strip(' ·')}"
@@ -746,7 +769,8 @@ class DeboFace:
         self.next_story_button.pack(anchor="e", pady=(8, 0))
         published = first.published_at.strftime("%d %b · %H:%M UTC") if first.published_at else "publication time unavailable"
         self.info_meta.configure(text=f"{first.source or report.provider}  ·  {published}  ·  Retrieved {report.fetched_at.strftime('%H:%M UTC')}")
-        self._set_ticker("     •     ".join(f"{index}. {article.title} — {article.source}" for index, article in enumerate(articles, start=1)))
+        self.read_story_button.pack(anchor="e", pady=(6, 0))
+        self._set_ticker("\n".join(f"{index}. {article.title} — {article.source}" for index, article in enumerate(articles, start=1)))
 
     def _present_latest_information(self) -> None:
         weather = getattr(self.robot, "last_weather_report", None)
@@ -759,6 +783,7 @@ class DeboFace:
             intent = self.robot.last_intent
             self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
             self.next_story_button.pack_forget()
+            self.read_story_button.pack_forget()
             if intent == "weather" and "which location" in self.response.lower():
                 self.info_title.configure(text="WEATHER  /  LOCATION NEEDED")
                 self.info_main.configure(text="Tell me a city or town, for example: “weather in London”.")
