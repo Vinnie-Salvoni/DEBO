@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from desk_robot.config import BrainConfig
 from desk_robot.context import ConversationContext
 from desk_robot.core.capabilities import Capability, CapabilityRegistry, CapabilityStatus
 from desk_robot.information import (
@@ -22,22 +23,32 @@ class RobotState:
 class DeskRobot:
     def __init__(
         self,
-        name: str = "Debo",
-        context_limit: int = 5,
+        name: str | None = None,
+        context_limit: int | None = None,
         weather_provider: WeatherProvider | None = None,
         news_provider: NewsProvider | None = None,
+        config: BrainConfig | None = None,
     ) -> None:
-        self.state = RobotState(name=name)
+        self.config = config if config is not None else BrainConfig.from_environment()
+        resolved_name = name if name is not None else self.config.robot_name
+        resolved_context_limit = (
+            context_limit
+            if context_limit is not None
+            else self.config.conversation_context_turns
+        )
+        self.state = RobotState(name=resolved_name)
         self.capabilities = CapabilityRegistry()
         self.personality = Personality()
-        self.context = ConversationContext(max_turns=context_limit)
+        self.context = ConversationContext(max_turns=resolved_context_limit)
         self.weather_provider = (
             weather_provider
             if weather_provider is not None
-            else OpenMeteoWeatherProvider()
+            else OpenMeteoWeatherProvider(timeout=self.config.information_timeout_seconds)
         )
         self.news_provider = (
-            news_provider if news_provider is not None else RssNewsProvider()
+            news_provider
+            if news_provider is not None
+            else RssNewsProvider(timeout=self.config.information_timeout_seconds)
         )
         self.last_weather_report = None
         self.last_news_report = None
@@ -122,7 +133,7 @@ class DeskRobot:
 
         elif intent == "news":
             try:
-                report = self.news_provider.fetch_latest(limit=5)
+                report = self.news_provider.fetch_latest(limit=self.config.news_result_limit)
                 self.last_news_report = report
                 self.capabilities.set_status(
                     Capability.NEWS,

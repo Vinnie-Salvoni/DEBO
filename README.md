@@ -62,7 +62,7 @@ Environment variables configure hardware-independent defaults; they contain no s
 
 | Variable | Default | Allowed values |
 |---|---:|---|
-| `DEBO_NAME` | `DEBO` | 1–40 characters |
+| `DEBO_NAME` | `Debo` | 1–40 characters |
 | `DEBO_CONTEXT_TURNS` | `5` | Integer, 1–50 |
 | `DEBO_INFORMATION_TIMEOUT_SECONDS` | `8.0` | Number, 0.5–60 |
 | `DEBO_NEWS_RESULT_LIMIT` | `5` | Integer, 1–20 |

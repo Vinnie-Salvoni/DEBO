@@ -34,7 +34,7 @@ def _bounded_float(name: str, default: float, minimum: float, maximum: float) ->
 
 @dataclass(frozen=True, slots=True)
 class BrainConfig:
-    robot_name: str = "DEBO"
+    robot_name: str = "Debo"
     conversation_context_turns: int = 5
     information_timeout_seconds: float = 8.0
     news_result_limit: int = 5
@@ -42,7 +42,7 @@ class BrainConfig:
 
     @classmethod
     def from_environment(cls) -> BrainConfig:
-        name = os.getenv("DEBO_NAME", "DEBO").strip()
+        name = os.getenv("DEBO_NAME", "Debo").strip()
         if not name or len(name) > 40:
             raise ConfigurationError("DEBO_NAME must contain 1 to 40 characters.")
         bridge = os.getenv("DEBO_LAPTOP_BRIDGE_ENABLED", "false").strip().lower()
