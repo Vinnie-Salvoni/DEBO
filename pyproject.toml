@@ -12,8 +12,6 @@ dependencies = [
     "requests>=2.34.2",
     "sounddevice>=0.5.6",
     "faster-whisper>=1.2.1",
-    "pyttsx3>=2.99",
-    "numpy>=2.0",
     "av<19",
 ]
 
