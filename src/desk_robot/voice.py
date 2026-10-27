@@ -310,11 +310,11 @@ class VoiceController:
         if stream is not None:
             try:
                 stream.stop()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("Microphone stream stop failed during shutdown", exc_info=True)
             try:
                 stream.close()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("Microphone stream close failed during shutdown", exc_info=True)
         try:
             self._audio_queue.put_nowait(None)
