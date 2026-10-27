@@ -16,7 +16,9 @@ src/desk_robot/
 ├── personality.py           # Character voice and reactions
 ├── context.py               # Bounded session-only conversation context
 ├── information.py           # Weather/news models and provider adapters
-├── face.py                  # Tkinter face, animation, and desktop UI
+├── face.py                  # Tkinter desktop UI and animation loop
+├── face_geometry.py         # Pure eye shapes and semantic expressions
+├── face_settings.py         # Validated persistent face preferences
 ├── voice.py                 # Local microphone and wake-word recognition
 ├── speech.py                # Operating-system speech output
 └── sound.py                 # Original electronic sound effects
