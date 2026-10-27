@@ -42,6 +42,7 @@ class DeskRobot:
         self.last_intent = "unknown"
         self.news_cache = None
         self.last_news_index = 0
+        self.last_story_text: str | None = None
 
     def respond(self, message: str) -> str:
         original_message = message.strip()
@@ -55,6 +56,7 @@ class DeskRobot:
         self.last_weather_report = None
         self.last_news_report = None
         self.last_intent = "unknown"
+        self.last_story_text = None
 
         intent = "unknown"
 
@@ -78,6 +80,8 @@ class DeskRobot:
             intent = "help"
         elif self._is_weather_request(normalised):
             intent = "weather"
+        elif any(phrase in normalised for phrase in ("read the full story", "read full story", "read me the story", "read this story", "full story", "read the article", "read article")):
+            intent = "full_story"
         elif any(phrase in normalised for phrase in ("next story", "another story", "next headline")):
             intent = "next_news"
         elif self._is_news_request(normalised):
@@ -122,6 +126,24 @@ class DeskRobot:
                     response = "The news feed returned no headlines."
             except InformationError as error:
                 response = str(error)
+
+        elif intent == "full_story":
+            if not self.news_cache or not self.news_cache.articles:
+                response = "Ask me for the news first, then say read the full story."
+            else:
+                index = min(max(0, self.last_news_index), len(self.news_cache.articles) - 1)
+                article = self.news_cache.articles[index]
+                self.last_news_report = self.news_cache
+                fetch_story = getattr(self.news_provider, "fetch_story", None)
+                if fetch_story is None:
+                    response = "This news source doesn't support full-story reading yet."
+                else:
+                    try:
+                        self.last_story_text = fetch_story(article)
+                        response = f"All right. I'll read the full story: {article.title}."
+                    except InformationError as error:
+                        response = str(error)
+                        self.last_story_text = None
 
         elif intent == "next_news":
             if self.news_cache and self.news_cache.articles:
