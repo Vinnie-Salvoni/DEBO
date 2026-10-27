@@ -44,6 +44,7 @@ class VoiceController:
         self._model_lock = threading.Lock()
         self._closed = False
         self._listening = False
+        self._paused = False
         self._audio_queue: queue.Queue[bytes | None] = queue.Queue(maxsize=240)
         self._listener_thread: threading.Thread | None = None
         self._model_thread: threading.Thread | None = None
@@ -111,7 +112,7 @@ class VoiceController:
                 logger.exception("Voice event callback failed for event %r", event)
 
     def _audio_callback(self, indata, _frames, _time_info, status) -> None:
-        if self._closed or not self._model_ready.is_set():
+        if self._closed or self._paused or not self._model_ready.is_set():
             return
         if status:
             logger.warning("Microphone stream status: %s", status)
@@ -142,6 +143,13 @@ class VoiceController:
         max_frames = max(1, round(MAX_SPEECH_SECONDS / FRAME_SECONDS))
 
         while not self._closed and self._listening:
+            if self._paused:
+                frames, pre_roll = [], []
+                speech_started = False
+                silence_frames = 0
+                self._drain_audio_queue()
+                time.sleep(0.03)
+                continue
             try:
                 chunk = self._audio_queue.get(timeout=0.2)
             except queue.Empty:
@@ -279,6 +287,18 @@ class VoiceController:
                 self._audio_queue.get_nowait()
             except queue.Empty:
                 return
+
+
+    def pause(self) -> None:
+        """Temporarily ignore microphone audio while DEBO speaks to prevent feedback."""
+        self._paused = True
+        self._drain_audio_queue()
+
+    def resume(self) -> None:
+        """Resume wake-word detection after speech playback has ended."""
+        if not self._closed:
+            self._drain_audio_queue()
+            self._paused = False
 
     def close(self) -> None:
         """Stop microphone capture and join input workers without blocking the UI indefinitely."""
