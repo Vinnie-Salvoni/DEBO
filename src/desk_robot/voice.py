@@ -493,8 +493,12 @@ class VoiceController:
                 self._emit("speaking_end", "")
 
     def _speech_loop(self) -> None:
-        """Own the pyttsx3 engine on this worker thread and report each stage."""
-        engine = None
+        """Speak queued responses, isolating each Windows SAPI session.
+
+        Recreate pyttsx3 for each response. On some Windows SAPI setups a
+        reused engine returns from runAndWait quickly on later utterances
+        without producing audible output.
+        """
         logger.info("TTS worker started")
         while True:
             if self._closed and self._speech_queue.empty():
@@ -508,29 +512,29 @@ class VoiceController:
                 self._speech_queue.task_done()
                 break
 
+            engine = None
             stage = "initialisation"
             try:
-                if engine is None:
-                    import pyttsx3
+                import pyttsx3
 
-                    logger.info("TTS stage=init: creating pyttsx3 engine")
-                    engine = pyttsx3.init()
-                    voices = engine.getProperty("voices") or []
-                    selected = self._choose_robot_voice(voices)
-                    if selected is not None:
-                        engine.setProperty("voice", selected.id)
-                    engine.setProperty("rate", 142)
-                    engine.setProperty("volume", 0.9)
-                    logger.info(
-                        "TTS stage=init: engine ready; voices=%d selected=%s",
-                        len(voices),
-                        getattr(selected, "name", "system default"),
-                    )
+                logger.info("TTS stage=init: creating fresh pyttsx3 engine")
+                engine = pyttsx3.init()
+                voices = engine.getProperty("voices") or []
+                selected = self._choose_robot_voice(voices)
+                if selected is not None:
+                    engine.setProperty("voice", selected.id)
+                engine.setProperty("rate", 142)
+                engine.setProperty("volume", 0.9)
+                logger.info(
+                    "TTS stage=init: engine ready; voices=%d selected=%s",
+                    len(voices),
+                    getattr(selected, "name", "system default"),
+                )
 
                 stage = "engine.say"
                 delivered_text = self._robotic_delivery(text)
                 logger.info(
-                    "TTS stage=say: submitting %d characters to engine",
+                    "TTS stage=say: submitting %d characters to a fresh engine",
                     len(delivered_text),
                 )
                 engine.say(delivered_text)
@@ -539,8 +543,8 @@ class VoiceController:
                 logger.info("TTS stage=playback: waiting for engine completion")
                 engine.runAndWait()
                 logger.info(
-                    "TTS stage=playback: engine returned successfully; "
-                    "this does not prove audible output"
+                    "TTS stage=playback: engine returned; audible output still "
+                    "needs to be verified on the device"
                 )
             except Exception as error:
                 logger.exception("TTS failed at stage=%s", stage)
@@ -548,21 +552,15 @@ class VoiceController:
                     "tts_error",
                     f"TTS failed at {stage} ({type(error).__name__}): {error}",
                 )
+            finally:
                 if engine is not None:
                     try:
                         engine.stop()
                     except Exception:
-                        logger.debug("TTS engine stop failed during recovery", exc_info=True)
-                engine = None
-            finally:
+                        logger.debug("TTS engine stop failed during cleanup", exc_info=True)
                 self._speech_queue.task_done()
                 self._finish_speech_item()
 
-        if engine is not None:
-            try:
-                engine.stop()
-            except Exception:
-                logger.debug("TTS engine stop failed during shutdown", exc_info=True)
         logger.info("TTS worker stopped")
 
     @staticmethod
