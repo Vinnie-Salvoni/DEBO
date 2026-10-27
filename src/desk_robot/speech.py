@@ -6,12 +6,12 @@ robotic treatment, not a copy of any character voice.
 """
 from __future__ import annotations
 
+import array
 import logging
 import math
 import os
 import sys
 import tempfile
-import array
 import threading
 import wave
 from pathlib import Path
@@ -145,4 +145,4 @@ class SpeechSynthesizer:
             try:
                 winsound.PlaySound(None, winsound.SND_PURGE)
             except RuntimeError:
-                pass
+                logging.getLogger(__name__).debug("Could not purge speech playback", exc_info=True)
