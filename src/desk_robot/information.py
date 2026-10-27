@@ -17,6 +17,9 @@ class WeatherReport:
     provider: str
     fetched_at: datetime
     observed_at: datetime | None = None
+    daily_high_c: float | None = None
+    daily_low_c: float | None = None
+    forecast_condition: str | None = None
 
 
 @dataclass(frozen=True)
@@ -147,6 +150,8 @@ class OpenMeteoWeatherProvider:
                     "latitude": latitude,
                     "longitude": longitude,
                     "current": "temperature_2m,weather_code",
+                    "daily": "temperature_2m_max,temperature_2m_min,weather_code",
+                    "forecast_days": 1,
                     "timezone": "auto",
                 },
                 timeout=self.timeout,
@@ -167,6 +172,19 @@ class OpenMeteoWeatherProvider:
                 )
 
             observed_at = _parse_datetime(current.get("time"))
+            daily = payload.get("daily")
+            high = low = forecast_condition = None
+            if isinstance(daily, dict):
+                try:
+                    highs = daily.get("temperature_2m_max") or []
+                    lows = daily.get("temperature_2m_min") or []
+                    codes = daily.get("weather_code") or []
+                    if highs and lows and highs[0] is not None and lows[0] is not None:
+                        high, low = float(highs[0]), float(lows[0])
+                    if codes and codes[0] is not None:
+                        forecast_condition = _weather_condition(int(codes[0]))
+                except (TypeError, ValueError, IndexError):
+                    high = low = forecast_condition = None
             return WeatherReport(
                 location=place_name,
                 temperature_c=float(temperature),
@@ -174,6 +192,9 @@ class OpenMeteoWeatherProvider:
                 provider=self.name,
                 fetched_at=datetime.now(UTC),
                 observed_at=observed_at,
+                daily_high_c=high,
+                daily_low_c=low,
+                forecast_condition=forecast_condition,
             )
         except InformationError:
             raise
