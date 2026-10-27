@@ -493,7 +493,7 @@ class DeboFace:
         self._expression_from = self._current_shapes()
         self._expression_to = target
         self._expression_started = self.time
-        self._expression_duration = max(0.075, duration / self._speed())
+        self._expression_duration = max(0.075, duration)
 
     def set_state(self, state: str) -> None:
         if state == self.state:
