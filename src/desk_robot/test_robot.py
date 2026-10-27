@@ -1,15 +1,14 @@
-from desk_robot.context import ConversationContext
-from desk_robot.personality import Personality
-from desk_robot.robot import DeskRobot
-
 from datetime import UTC, datetime
 
+from desk_robot.context import ConversationContext
 from desk_robot.information import (
     InformationError,
     NewsArticle,
     NewsReport,
     WeatherReport,
 )
+from desk_robot.personality import Personality
+from desk_robot.robot import DeskRobot
 
 
 def test_robot_recalls_previous_user_message() -> None:
