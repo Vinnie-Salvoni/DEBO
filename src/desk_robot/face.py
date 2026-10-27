@@ -24,6 +24,7 @@ from desk_robot.face_geometry import (
     morph_shape,
     smoothstep,
 )
+from desk_robot.core.events import RobotEvent, RobotEventType
 from desk_robot.face_settings import (
     DEFAULT_SETTINGS,  # noqa: F401
     load_settings,
@@ -52,7 +53,8 @@ class DeboFace:
         )
     def __init__(self) -> None:
         self.settings = load_settings()
-        self.robot = DeskRobot()
+        self._robot_events: queue.Queue[RobotEvent] = queue.Queue()
+        self.robot = DeskRobot(event_sink=self._queue_robot_event)
         self.sound = SoundManager(
             enabled=self.settings["sound_enabled"],
             volume=self.settings["sound_volume"] / 100,
@@ -467,6 +469,33 @@ class DeboFace:
             lambda result, rid=request_id: self._collect_result(result, rid)
         )
 
+    def _queue_robot_event(self, event: RobotEvent) -> None:
+        """Receive brain events from worker threads without touching Tkinter."""
+        self._robot_events.put(event)
+
+    def _poll_robot_events(self) -> None:
+        """Apply semantic brain events on the Tkinter thread."""
+        while True:
+            try:
+                event = self._robot_events.get_nowait()
+            except queue.Empty:
+                return
+
+            if self.closed:
+                continue
+            if event.type in {
+                RobotEventType.WEATHER_LOOKUP_STARTED,
+                RobotEventType.NEWS_LOOKUP_STARTED,
+            }:
+                if self.busy:
+                    self.show_expression("curious", 0.18)
+            elif event.type in {
+                RobotEventType.WEATHER_LOOKUP_FAILED,
+                RobotEventType.NEWS_LOOKUP_FAILED,
+            }:
+                if self.busy:
+                    self.show_expression("concerned", 0.18)
+
     def _collect_result(self, future: Future[str], request_id: int) -> None:
         """Worker callback: queue results only; never call Tk from this thread."""
         try:
@@ -475,6 +504,7 @@ class DeboFace:
             self.results.put(("error", str(error), request_id))
 
     def _poll_results(self) -> None:
+        self._poll_robot_events()
         while True:
             try:
                 kind, result, request_id = self.results.get_nowait()
