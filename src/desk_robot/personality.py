@@ -91,11 +91,11 @@ class Personality:
         return self._choose(
             "unknown",
             (
-                "Ooh, interesting! Tell me more. "
-                "I'm still learning how to understand the world.",
-                "Hmm, I haven't quite figured that one out yet. "
-                "Can you tell me a little more?",
-                "That's got me curious! I don't know enough to answer just yet, "
-                "but I'd like to hear more.",
+                ("Ooh, interesting! Tell me more. "
+                 "I'm still learning how to understand the world."),
+                ("Hmm, I haven't quite figured that one out yet. "
+                 "Can you tell me a little more?"),
+                ("That's got me curious! I don't know enough to answer just yet, "
+                 "but I'd like to hear more."),
             ),
         )
