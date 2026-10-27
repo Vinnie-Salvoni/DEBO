@@ -103,6 +103,9 @@ class DeskRobot:
         if not original_message:
             return "I'm listening... say something!"
 
+        self._emit_event(
+            RobotEventType.USER_INPUT_RECEIVED, data={"character_count": len(original_message)}
+        )
         self.state.turns += 1
         previous_message = self.context.last_user_message
         self.last_weather_report = None
