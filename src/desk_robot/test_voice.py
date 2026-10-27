@@ -28,6 +28,10 @@ class FakeEngine:
     def say(self, text: str) -> None:
         self.spoken.append(text)
 
+    def save_to_file(self, text: str, path: str) -> None:
+        self.spoken.append(text)
+        Path(path).write_bytes(b"fake WAV content")
+
     def runAndWait(self) -> None:
         return None
 
@@ -60,6 +64,7 @@ def test_audio_callback_discards_audio_until_model_is_ready() -> None:
 
 def test_speech_worker_processes_multiple_utterances(monkeypatch) -> None:
     engine = FakeEngine()
+    monkeypatch.setattr(VoiceController, "_play_robot_voice_file", staticmethod(lambda _path: None))
     fake_module = types.SimpleNamespace(init=lambda: engine)
     monkeypatch.setitem(sys.modules, "pyttsx3", fake_module)
 
@@ -88,6 +93,7 @@ def test_speech_worker_reports_playback_error_and_continues(monkeypatch) -> None
         return engine
 
     events: list[tuple[str, str]] = []
+    monkeypatch.setattr(VoiceController, "_play_robot_voice_file", staticmethod(lambda _path: None))
     monkeypatch.setitem(sys.modules, "pyttsx3", types.SimpleNamespace(init=fake_init))
 
     voice = VoiceController()
