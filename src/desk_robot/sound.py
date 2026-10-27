@@ -1,7 +1,6 @@
 """Small, dependency-free sound effects system for DEBO.
 
 Windows playback uses winsound. Other platforms safely remain silent.
-The speak() method is a placeholder for a future text-to-speech backend.
 """
 
 from __future__ import annotations
@@ -99,11 +98,6 @@ class SoundManager:
             winsound.PlaySound(None, winsound.SND_PURGE)
         except RuntimeError:
             pass
-
-    def speak(self, text: str) -> bool:
-        """Reserved for future speech synthesis; no speech backend yet."""
-        del text
-        return False
 
     def close(self) -> None:
         self._closed = True
