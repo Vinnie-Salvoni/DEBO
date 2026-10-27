@@ -4,6 +4,7 @@ from desk_robot.information import (
     NewsArticle,
     NewsReport,
     WeatherReport,
+    _ArticleTextParser,
 )
 
 
@@ -112,3 +113,19 @@ def test_daily_forecast_fields_are_optional() -> None:
     assert report.daily_high_c is None
     assert report.daily_low_c is None
     assert report.forecast_condition is None
+
+
+
+def test_article_text_parser_extracts_readable_paragraphs_and_ignores_scripts() -> None:
+    parser = _ArticleTextParser()
+    parser.feed(
+        "<html><script><p>Do not read this hidden script content at all.</p></script>"
+        "<nav><p>Navigation should not be spoken in the article reader.</p></nav>"
+        "<article><p>This is the first readable article paragraph with useful detail.</p>"
+        "<p>This is the second readable article paragraph with more context.</p></article></html>"
+    )
+
+    assert parser.paragraphs == [
+        "This is the first readable article paragraph with useful detail.",
+        "This is the second readable article paragraph with more context.",
+    ]
