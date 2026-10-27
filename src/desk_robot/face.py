@@ -697,7 +697,7 @@ class DeboFace:
         elif getattr(self.robot, "last_intent", "") in {"weather", "news", "next_news", "full_story"}:
             intent = self.robot.last_intent
             self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
-                    if intent == "weather" and "which location" in self.response.lower():
+            if intent == "weather" and "which location" in self.response.lower():
                 self.info_title.configure(text="WEATHER  /  LOCATION NEEDED")
                 self.info_main.configure(text="Tell me a city or town, for example: “weather in London”.")
                 self.info_meta.configure(text="I'll fetch live conditions and today's high/low.")
