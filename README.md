@@ -84,7 +84,6 @@ The current desktop prototype uses Open-Meteo for weather and RSS for news. Weat
 uv sync --all-groups
 uv run pytest
 uv run ruff check .
-uv run ruff format --check .
 ```
 
 The normal test suite should not require live provider endpoints, a microphone, or a physical robot.

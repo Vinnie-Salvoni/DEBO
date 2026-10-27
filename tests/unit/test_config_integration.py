@@ -25,7 +25,9 @@ def test_robot_uses_configured_name_and_context_limit() -> None:
     robot = DeskRobot(config=config)
 
     assert robot.state.name == "Pip"
-    assert robot.context._turns.maxlen == 2
+    for index in range(3):
+        robot.context.add_turn(f"User {index}", f"Response {index}")
+    assert len(robot.context.turns) == 2
 
 
 def test_explicit_constructor_arguments_override_config() -> None:
@@ -33,7 +35,9 @@ def test_explicit_constructor_arguments_override_config() -> None:
     robot = DeskRobot(name="Debo", context_limit=7, config=config)
 
     assert robot.state.name == "Debo"
-    assert robot.context._turns.maxlen == 7
+    for index in range(8):
+        robot.context.add_turn(f"User {index}", f"Response {index}")
+    assert len(robot.context.turns) == 7
 
 
 def test_default_provider_timeouts_come_from_config() -> None:
