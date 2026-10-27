@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from desk_robot.config import BrainConfig
 from desk_robot.context import ConversationContext
+from desk_robot.behaviour import BehaviourEngine
 from desk_robot.core.capabilities import Capability, CapabilityRegistry, CapabilityStatus
 from desk_robot.core.events import RobotEvent, RobotEventType
 from desk_robot.information import (
@@ -47,6 +48,7 @@ class DeskRobot:
         self.capabilities = CapabilityRegistry()
         self._event_sink = event_sink
         self.personality = Personality()
+        self.behaviour = BehaviourEngine()
         self.context = ConversationContext(max_turns=resolved_context_limit)
         self.weather_provider = (
             weather_provider
@@ -154,6 +156,18 @@ class DeskRobot:
             self.pending_intent = None
 
         self.last_intent = intent
+        reaction = self.behaviour.observe(intent)
+        self._emit_event(
+            RobotEventType.BEHAVIOUR_CHANGED,
+            data={
+                "intent": intent,
+                "reaction": reaction.reaction,
+                "curiosity": reaction.curiosity,
+                "energy": reaction.energy,
+                "familiarity": reaction.familiarity,
+                "interactions": reaction.interactions,
+            },
+        )
 
         if intent == "cancel":
             self.pending_intent = None

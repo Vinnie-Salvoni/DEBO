@@ -471,6 +471,16 @@ class DeboFace:
                 RobotEventType.NEWS_LOOKUP_FAILED,
             } and self.busy:
                 self.show_expression("concerned", 0.18)
+            elif event.type == RobotEventType.BEHAVIOUR_CHANGED and self.busy:
+                expression = {
+                    "greeting": "happy",
+                    "pleased": "happy",
+                    "focused": "focused",
+                    "curious": "curious",
+                    "sleepy": "sleepy",
+                    "neutral": "idle",
+                }.get(str(event.data.get("reaction")), "curious")
+                self.show_expression(expression, 0.22)
 
     def _collect_result(self, future: Future[str], request_id: int) -> None:
         """Worker callback: queue results only; never call Tk from this thread."""

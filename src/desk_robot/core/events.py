@@ -10,6 +10,7 @@ from typing import Any
 class RobotEventType(StrEnum):
     STARTED = "started"
     USER_INPUT_RECEIVED = "user_input_received"
+    BEHAVIOUR_CHANGED = "behaviour_changed"
     LISTENING_STARTED = "listening_started"
     THINKING_STARTED = "thinking_started"
     WEATHER_LOOKUP_STARTED = "weather_lookup_started"

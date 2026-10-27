@@ -336,3 +336,36 @@ def test_news_language_recognises_world_events_phrasing() -> None:
     response = robot.respond("What's going on in the world?")
     assert robot.last_news_report is not None
     assert "2 headlines" in response
+
+
+def test_behaviour_state_evolves_with_interactions_and_stays_bounded() -> None:
+    robot = make_information_robot()
+    initial_familiarity = robot.behaviour.familiarity
+
+    robot.respond("hello")
+    first = robot.behaviour
+    robot.respond("tell me something interesting")
+    second = robot.behaviour
+
+    assert first.interactions == 1
+    assert second.interactions == 2
+    assert second.familiarity > initial_familiarity
+    assert 0.0 <= second.curiosity <= 1.0
+    assert 0.0 <= second.energy <= 1.0
+
+
+def test_behaviour_reaction_is_emitted_as_a_semantic_event() -> None:
+    events = []
+    robot = DeskRobot(
+        weather_provider=FakeWeatherProvider(),
+        news_provider=FakeNewsProvider(),
+        event_sink=events.append,
+    )
+
+    robot.respond("hello")
+
+    reactions = [event for event in events if event.type.value == "behaviour_changed"]
+    assert reactions
+    assert reactions[-1].data["intent"] == "greeting"
+    assert reactions[-1].data["reaction"] == "greeting"
+    assert reactions[-1].data["interactions"] == 1
