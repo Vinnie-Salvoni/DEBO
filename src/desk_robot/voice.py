@@ -23,14 +23,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-FRAME_SECONDS = 0.10
-SILENCE_SECONDS = 0.55
-MIN_SPEECH_SECONDS = 0.20
-MAX_SPEECH_SECONDS = 14.0
-WAKE_WINDOW_SECONDS = 8.0
-ENERGY_THRESHOLD = 100
-
-
 SAMPLE_RATE = 16_000
 CHANNELS = 1
 SAMPLE_WIDTH_BYTES = 2
@@ -155,7 +147,7 @@ class VoiceController:
             try:
                 callback(event, text)
             except Exception:
-                pass
+                logger.exception("Voice event callback failed for event %r", event)
 
     def _audio_callback(
         self, indata, _frames, _time_info, _status
@@ -163,6 +155,9 @@ class VoiceController:
         """Called by sounddevice for each microphone audio block."""
         if self._closed or self._speaking.is_set() or not self._model_ready.is_set():
             return
+
+        if _status:
+            logger.warning("Microphone stream status: %s", _status)
 
         try:
             self._audio_queue.put_nowait(indata.tobytes())
@@ -339,85 +334,68 @@ class VoiceController:
             return
 
         normalised = self._normalise(transcript)
+        if not normalised:
+            logger.debug("Whisper returned an empty transcript")
+            return
 
-        
         wake = self._find_wake_phrase(normalised)
-
         if wake is not None:
+            # _find_wake_phrase returns character offsets, not a regex match.
+            # Normalisation only changes case/whitespace, so these offsets are
+            # valid for slicing the normalised transcript.
             remainder = normalised[wake[1]:].strip(" ,.!?:;-")
             self._wake_until = time.monotonic() + WAKE_WINDOW_SECONDS
+            logger.info("Wake phrase recognised from transcript: %r", transcript)
             self._emit("wake", transcript)
 
-            # Support "Hey DEBO, what's the weather?" in one sentence.
             if remainder:
+                # A combined wake phrase + command is a single interaction.
                 self._wake_until = 0.0
+                logger.info("Command captured with wake phrase: %r", remainder)
                 self._emit("transcript", remainder)
-
             return
 
-        # If the wake phrase was spoken separately, accept the next utterance.
-        if (
-            self._wake_until
-            and time.monotonic() <= self._wake_until
-        ):
+        if self._wake_until and time.monotonic() <= self._wake_until:
             self._wake_until = 0.0
-            self._emit("transcript", transcript.strip())
-
-
-        if wake:
-            remainder = normalised[wake.end():].strip(
-                " ,.!?:;-"
-            )
-            self._wake_until = (
-                time.monotonic() + WAKE_WINDOW_SECONDS
-            )
-            self._emit("wake", transcript)
-
-            # Support "Hey DEBO, what's the weather?" in one sentence.
-            if remainder:
-                self._wake_until = 0.0
-                self._emit("transcript", remainder)
-
+            command = transcript.strip()
+            if command:
+                logger.info("Command captured inside wake window: %r", command)
+                self._emit("transcript", command)
             return
 
-        # If the wake phrase was spoken separately, accept the next utterance.
-        if (
-            self._wake_until
-            and time.monotonic() <= self._wake_until
-        ):
-            self._wake_until = 0.0
-            self._emit("transcript", transcript.strip())
-    
+        logger.debug("Ignoring transcript without wake phrase: %r", transcript)
+
     @staticmethod
     def _find_wake_phrase(text: str) -> tuple[int, int] | None:
-        """Find a reasonably close spoken version of the DEBO wake phrase."""
+        """Find 'Hey DEBO' with bounded tolerance for common Whisper variants.
+
+        This is transcription-level fuzzy matching, not an acoustic wake-word
+        model. Requiring a greeting plus a short name-like token sequence helps
+        avoid triggering on unrelated words.
+        """
         normalised = VoiceController._normalise(text)
         words = list(re.finditer(r"\b[\w']+\b", normalised))
-
         greetings = {"hey", "hi", "okay", "ok", "hello"}
-        targets = ("debo", "deebo", "thebo", "deevo", "devo")
+        targets = ("debo", "deebo", "thebo", "deevo", "devo", "deb0")
 
         for index, word in enumerate(words):
-            if word.group() not in greetings:
+            if word.group() not in greetings or index + 1 >= len(words):
                 continue
 
-            # Check a few following words because Whisper can split a name.
-            for end_index in range(index + 1, min(index + 4, len(words))):
-                candidate = " ".join(
-                    match.group()
-                    for match in words[index + 1:end_index + 1]
-                )
+            # Only inspect one or two following tokens; including command words
+            # in the fuzzy candidate can create false positives.
+            for end_index in range(index + 1, min(index + 3, len(words))):
+                candidate_words = words[index + 1:end_index + 1]
+                compact = "".join(match.group() for match in candidate_words)
+                if not 3 <= len(compact) <= 6:
+                    continue
 
-                compact = candidate.replace(" ", "")
                 score = max(
-                    difflib.SequenceMatcher(
-                        None, compact, target
-                    ).ratio()
+                    difflib.SequenceMatcher(None, compact, target).ratio()
                     for target in targets
                 )
-
-                if score >= 0.70:
-                    return word.start(), words[end_index].end()
+                if compact in targets or score >= 0.75:
+                    return word.start(), candidate_words[-1].end()
 
         return None
 
@@ -515,10 +493,12 @@ class VoiceController:
                 self._emit("speaking_end", "")
 
     def _speech_loop(self) -> None:
-        """Own one pyttsx3 engine on one worker thread; recover per utterance."""
+        """Own the pyttsx3 engine on this worker thread and report each stage."""
         engine = None
         logger.info("TTS worker started")
-        while not self._closed:
+        while True:
+            if self._closed and self._speech_queue.empty():
+                break
             try:
                 text = self._speech_queue.get(timeout=0.25)
             except queue.Empty:
@@ -528,10 +508,12 @@ class VoiceController:
                 self._speech_queue.task_done()
                 break
 
+            stage = "initialisation"
             try:
                 if engine is None:
                     import pyttsx3
-                    logger.info("Initialising pyttsx3")
+
+                    logger.info("TTS stage=init: creating pyttsx3 engine")
                     engine = pyttsx3.init()
                     voices = engine.getProperty("voices") or []
                     selected = self._choose_robot_voice(voices)
@@ -539,34 +521,49 @@ class VoiceController:
                         engine.setProperty("voice", selected.id)
                     engine.setProperty("rate", 142)
                     engine.setProperty("volume", 0.9)
-                logger.info("Starting speech playback")
-                engine.say(self._robotic_delivery(text))
+                    logger.info(
+                        "TTS stage=init: engine ready; voices=%d selected=%s",
+                        len(voices),
+                        getattr(selected, "name", "system default"),
+                    )
+
+                stage = "engine.say"
+                delivered_text = self._robotic_delivery(text)
+                logger.info(
+                    "TTS stage=say: submitting %d characters to engine",
+                    len(delivered_text),
+                )
+                engine.say(delivered_text)
+
+                stage = "engine.runAndWait"
+                logger.info("TTS stage=playback: waiting for engine completion")
                 engine.runAndWait()
-                logger.info("Speech playback completed")
+                logger.info(
+                    "TTS stage=playback: engine returned successfully; "
+                    "this does not prove audible output"
+                )
             except Exception as error:
+                logger.exception("TTS failed at stage=%s", stage)
                 self._emit(
                     "tts_error",
-                    f"Speech playback failed ({type(error).__name__}): {error}",
+                    f"TTS failed at {stage} ({type(error).__name__}): {error}",
                 )
                 if engine is not None:
                     try:
                         engine.stop()
                     except Exception:
-                        pass
-                # Reinitialise on the next response instead of killing the worker.
+                        logger.debug("TTS engine stop failed during recovery", exc_info=True)
                 engine = None
             finally:
                 self._speech_queue.task_done()
                 self._finish_speech_item()
 
         if engine is not None:
-            logger.info(
-            "TTS worker received response (%d characters)", len(text)
-            )
             try:
                 engine.stop()
             except Exception:
-                pass
+                logger.debug("TTS engine stop failed during shutdown", exc_info=True)
+        logger.info("TTS worker stopped")
 
     @staticmethod
     def _choose_robot_voice(voices):
@@ -641,4 +638,8 @@ class VoiceController:
         except queue.Full:
             pass
 
-        self._speech_queue.put(None)
+        try:
+            self._speech_queue.put_nowait(None)
+        except queue.Full:
+            logger.warning("Could not queue TTS shutdown sentinel; worker will stop on close")
+        logger.info("Voice controller shutdown requested")
