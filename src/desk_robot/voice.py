@@ -345,13 +345,13 @@ class VoiceController:
             # valid for slicing the normalised transcript.
             remainder = normalised[wake[1]:].strip(" ,.!?:;-")
             self._wake_until = time.monotonic() + WAKE_WINDOW_SECONDS
-            logger.info("Wake phrase recognised from transcript: %r", transcript)
+            logger.info("Wake phrase recognised in a completed transcript")
             self._emit("wake", transcript)
 
             if remainder:
                 # A combined wake phrase + command is a single interaction.
                 self._wake_until = 0.0
-                logger.info("Command captured with wake phrase: %r", remainder)
+                logger.info("Command captured with wake phrase (%d characters)", len(remainder))
                 self._emit("transcript", remainder)
             return
 
@@ -359,7 +359,7 @@ class VoiceController:
             self._wake_until = 0.0
             command = transcript.strip()
             if command:
-                logger.info("Command captured inside wake window: %r", command)
+                logger.info("Command captured inside wake window (%d characters)", len(command))
                 self._emit("transcript", command)
             return
 
