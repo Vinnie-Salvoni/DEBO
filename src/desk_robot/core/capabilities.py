@@ -1,5 +1,6 @@
 """Independent runtime capability tracking for DEBO."""
 from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import StrEnum
 from threading import RLock

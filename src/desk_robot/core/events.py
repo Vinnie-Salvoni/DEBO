@@ -1,5 +1,6 @@
 """Semantic events shared by the brain and output adapters."""
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import StrEnum
 from time import time

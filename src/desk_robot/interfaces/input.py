@@ -1,5 +1,6 @@
 """Input contracts independent of the chosen UI or microphone."""
 from __future__ import annotations
+
 from collections.abc import Callable
 from typing import Protocol
 
