@@ -528,10 +528,112 @@ class DeboFace:
         """Queue voice events for the Tk thread; the audio worker never touches widgets."""
         self.results.put((event, text, -1))
 
+
+    def _handle_settings_command(self, message: str) -> str | None:
+        """Apply common spoken preference commands without opening a settings dialog."""
+        import re
+
+        text = " ".join(message.lower().strip().split())
+        colors = {
+            "cyan": "#00D9D0", "teal": "#00BFAE", "blue": "#329BFF",
+            "light blue": "#70C8FF", "purple": "#B58CFF", "pink": "#FF80C8",
+            "magenta": "#FF4FD8", "green": "#52E39A", "lime": "#B7F34A",
+            "red": "#FF5B68", "orange": "#FF9B54", "yellow": "#FFD166",
+            "white": "#F2F7FF", "gold": "#FFC857",
+        }
+        colour_match = re.search(
+            r"(?:change|set|make) (?:my )?(?:eye colour|eye color|eyes|eye) (?:to )?(.+)$",
+            text,
+        )
+        if colour_match:
+            requested = colour_match.group(1).strip(" .!?")
+            if requested in colors:
+                self.settings["eye_color"] = colors[requested]
+                save_settings(self.settings)
+                self.show_expression("happy", 0.10)
+                return f"Eye colour changed to {requested}."
+            if re.fullmatch(r"#[0-9a-f]{6}", requested):
+                self.settings["eye_color"] = requested
+                save_settings(self.settings)
+                return "Eye colour updated."
+            return "Try a colour like blue, teal, purple, pink, green, red, orange, or white."
+
+        if any(phrase in text for phrase in ("turn sound off", "turn sounds off", "disable sound", "mute sound effects")):
+            self.settings["sound_enabled"] = False
+            self.sound.set_enabled(False)
+            save_settings(self.settings)
+            return "Sound effects are off."
+        if any(phrase in text for phrase in ("turn sound on", "turn sounds on", "enable sound", "unmute sound effects")):
+            self.settings["sound_enabled"] = True
+            self.sound.set_enabled(True)
+            save_settings(self.settings)
+            return "Sound effects are on."
+        if any(phrase in text for phrase in ("turn speech off", "turn talking off", "disable speech", "stop talking")):
+            self.settings["speech_enabled"] = False
+            self.speech.set_enabled(False)
+            save_settings(self.settings)
+            return "Speech is off. I'll keep responding on screen."
+        if any(phrase in text for phrase in ("turn speech on", "turn talking on", "enable speech", "start talking")):
+            self.settings["speech_enabled"] = True
+            self.speech.set_enabled(True)
+            save_settings(self.settings)
+            return "Speech is on."
+        if "animation speed" in text or "animations faster" in text or "animations slower" in text:
+            if "fast" in text or "faster" in text:
+                speed = 2.0
+            elif "slow" in text or "slower" in text:
+                speed = 0.65
+            elif "normal" in text:
+                speed = 1.0
+            else:
+                match = re.search(r"(?:to )([0-9]+(?:\.[0-9]+)?)", text)
+                if not match:
+                    return "Say animation speed fast, normal, slow, or a number from 0.5 to 2."
+                speed = float(match.group(1))
+            self.settings["animation_speed"] = max(0.5, min(2.0, speed))
+            save_settings(self.settings)
+            return f"Animation speed set to {self.settings['animation_speed']:.1f}."
+        if "speech volume" in text or "voice volume" in text or "speaking volume" in text:
+            match = re.search(r"([0-9]{1,3})", text)
+            if not match:
+                return "Say speech volume followed by a percentage from zero to one hundred."
+            volume = max(0, min(100, int(match.group(1))))
+            self.settings["speech_volume"] = volume
+            self.speech.set_volume(volume / 100)
+            save_settings(self.settings)
+            return f"Speech volume set to {volume} percent."
+        if "sound volume" in text or "sound effects volume" in text:
+            match = re.search(r"([0-9]{1,3})", text)
+            if not match:
+                return "Say sound volume followed by a percentage from zero to one hundred."
+            volume = max(0, min(100, int(match.group(1))))
+            self.settings["sound_volume"] = volume
+            self.sound.set_volume(volume / 100)
+            save_settings(self.settings)
+            return f"Sound effects volume set to {volume} percent."
+        if text in {"settings", "open settings", "show settings", "change settings"}:
+            return "Try saying change my eye colour to blue, animation speed fast, turn sound off, or speech volume 70."
+        return None
+
+    def _finish_settings_command(self, response: str) -> None:
+        self.response = response
+        self.response_label.configure(text=response)
+        self.busy = False
+        self.hide_information()
+        self.set_state("happy")
+        self._happy_until = self.time + 0.75
+        if self.settings.get("speech_enabled", True):
+            self.speech_executor.submit(self.speech.speak, response)
+        self.sound.play("success")
+
     def submit_message(self, message: str) -> None:
         """Process a recognised voice transcript without any text-entry UI."""
         message = str(message).strip()
         if not message or self.closed:
+            return
+        settings_response = self._handle_settings_command(message)
+        if settings_response is not None:
+            self._finish_settings_command(settings_response)
             return
         if self._active_future is not None:
             self._active_future.cancel()
@@ -553,7 +655,7 @@ class DeboFace:
         lowered = message.lower()
         if any(word in lowered for word in ("weather", "temperature", "forecast")):
             self.show_information_loading("weather")
-        elif any(word in lowered for word in ("news", "headlines", "latest stories", "what's happening", "what is happening", "next story", "another story", "next headline")):
+        elif any(word in lowered for word in ("news", "headlines", "latest stories", "what's happening", "what is happening", "next story", "another story", "next headline", "full story", "read the story", "read this story", "read article")):
             self.show_information_loading("news")
         else:
             self.hide_information()
@@ -661,7 +763,11 @@ class DeboFace:
             self.busy = False
             if kind == "ok":
                 self._present_latest_information()
-            elif getattr(self.robot, "last_intent", "") in {"weather", "news", "next_news"}:
+                story_text = getattr(self.robot, "last_story_text", None)
+                speech_text = story_text if story_text else result
+                if self.settings.get("speech_enabled", True) and speech_text:
+                    self.speech_executor.submit(self.speech.speak, speech_text)
+            elif getattr(self.robot, "last_intent", "") in {"weather", "news", "next_news", "full_story"}:
                 self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
                 self.info_title.configure(text=f"{self.robot.last_intent.upper()}  /  UNAVAILABLE")
                 self.info_main.configure(text="I couldn't reach the information service. Please try again.")
