@@ -317,6 +317,8 @@ class DeboFace:
         self._expression_to = EXPRESSIONS["idle"]
         self._expression_duration = 0.32
         self._happy_until = 0.0
+        self._idle_since = 0.0
+        self._sleeping = False
         self._thinking_bob_started: float | None = None
         self._thinking_bob_duration = 0.30
         self._thinking_bobs = 0
@@ -474,6 +476,10 @@ class DeboFace:
             return
         self._set_expression(state, 0.34 if state in {"happy", "thinking"} else 0.28)
         self.state = state
+        if state == "idle":
+            self._idle_since = self.time
+        else:
+            self._sleeping = False
         if state == "thinking":
             self._thinking_bob_started = self.time
             self._thinking_bobs = 0
@@ -968,6 +974,9 @@ class DeboFace:
             return
         self.time += (FRAME_MS / 1000.0) * self._speed()
         self._poll_results()
+        if self.state == "idle" and not self._sleeping and self.time - self._idle_since >= 90.0:
+            self.show_expression("sleeping", 0.55)
+            self._sleeping = True
         self.draw_face()
         self._animate_ticker()
         self.root.after(FRAME_MS, self.animate)
