@@ -513,6 +513,7 @@ class VoiceController:
                 break
 
             engine = None
+            audio_path: Path | None = None
             stage = "initialisation"
             try:
                 import pyttsx3
@@ -558,7 +559,7 @@ class VoiceController:
                     f"TTS failed at {stage} ({type(error).__name__}): {error}",
                 )
             finally:
-                if "audio_path" in locals():
+                if audio_path is not None:
                     try:
                         audio_path.unlink(missing_ok=True)
                     except OSError:
