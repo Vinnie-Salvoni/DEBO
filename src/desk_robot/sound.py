@@ -22,13 +22,13 @@ SAMPLE_RATE = 22050
 
 # Each event is a sequence of (frequency in Hz, duration in seconds).
 SOUNDS: dict[str, tuple[tuple[float, float], ...]] = {
-    "startup": ((660, 0.075), (880, 0.11)),
-    "send": ((520, 0.055),),
-    "thinking": ((440, 0.065), (554, 0.07)),
-    "success": ((660, 0.065), (784, 0.07), (1046, 0.12)),
-    "error": ((330, 0.12), (247, 0.17)),
-    "click": ((720, 0.04),),
-    "curious": ((500, 0.075), (740, 0.10)),
+    "startup": ((520, 0.055), (740, 0.07), (1040, 0.12)),
+    "send": ((610, 0.045), (830, 0.055)),
+    "thinking": ((430, 0.08), (575, 0.065), (500, 0.10)),
+    "success": ((620, 0.055), (820, 0.06), (1120, 0.08), (940, 0.13)),
+    "error": ((390, 0.075), (310, 0.10), (225, 0.15)),
+    "click": ((760, 0.035), (1020, 0.025)),
+    "curious": ((460, 0.065), (690, 0.055), (920, 0.12)),
 }
 
 
@@ -105,7 +105,7 @@ class SoundManager:
 
     def _generate_wav(self, event: str, volume_level: int) -> Path:
         """Create a small 16-bit mono WAV file for one sound event."""
-        path = self._directory / f"{event}_{volume_level}.wav"
+        path = self._directory / f"v2_{event}_{volume_level}.wav"
         if path.exists():
             return path
 
@@ -113,23 +113,28 @@ class SoundManager:
         amplitude = int(10000 * volume)
         audio = bytearray()
 
-        for frequency, duration in SOUNDS[event]:
+        for note_index, (frequency, duration) in enumerate(SOUNDS[event]):
             sample_count = int(SAMPLE_RATE * duration)
-
+            # Each note bends and wobbles slightly; layered harmonics make it
+            # feel like a tiny electro-mechanical voice rather than a pure beep.
+            bend = 1.0 if note_index % 2 == 0 else 0.88
+            phase = 0.0
             for index in range(sample_count):
-                # Fade each note in and out to avoid harsh clicks.
-                fade_in = min(1.0, index / 180)
-                fade_out = min(1.0, (sample_count - index) / 260)
+                progress = index / max(1, sample_count - 1)
+                fade_in = min(1.0, index / 150)
+                fade_out = min(1.0, (sample_count - index) / 240)
                 envelope = max(0.0, min(fade_in, fade_out))
-                sample = int(
-                    amplitude
-                    * envelope
-                    * math.sin(2 * math.pi * frequency * index / SAMPLE_RATE)
-                )
+                wobble = math.sin(2 * math.pi * 7.0 * index / SAMPLE_RATE) * 0.018
+                instant_frequency = frequency * (bend + (1.0 - bend) * progress + wobble)
+                phase += 2 * math.pi * instant_frequency / SAMPLE_RATE
+                fundamental = math.sin(phase)
+                harmonic = 0.32 * math.sin(phase * 2.01 + 0.2)
+                overtone = 0.12 * math.sin(phase * 3.97 + 0.7)
+                sample = int(amplitude * envelope * (fundamental + harmonic + overtone) * 0.68)
                 audio.extend(sample.to_bytes(2, byteorder="little", signed=True))
 
-            # A short silence makes consecutive notes sound like a chirp.
-            audio.extend(b"\x00\x00" * int(SAMPLE_RATE * 0.018))
+            # A tiny breath-like gap helps each multi-tone chirp read as a phrase.
+            audio.extend(b"\x00\x00" * int(SAMPLE_RATE * 0.012))
 
         with wave.open(os.fspath(path), "wb") as output:
             output.setnchannels(1)
