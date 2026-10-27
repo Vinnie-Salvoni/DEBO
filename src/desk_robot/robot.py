@@ -118,7 +118,17 @@ class DeskRobot:
 
         intent = "unknown"
 
-        if normalised in {"cancel", "cancel that", "never mind", "nevermind", "forget it", "stop", "don't worry", "dont worry"}:
+        if normalised in {
+            "forget our conversation",
+            "forget this conversation",
+            "forget what i've told you",
+            "forget what i have told you",
+            "clear our conversation",
+            "clear conversation history",
+            "clear our chat history",
+        }:
+            intent = "forget_context"
+        elif normalised in {"cancel", "cancel that", "never mind", "nevermind", "forget it", "stop", "don't worry", "dont worry"}:
             intent = "cancel"
         elif normalised in {"hello", "hi", "hey", "hello robot"}:
             intent = "greeting"
@@ -169,7 +179,14 @@ class DeskRobot:
             },
         )
 
-        if intent == "cancel":
+        if intent == "forget_context":
+            self.context.clear()
+            self.pending_intent = None
+            self.news_cache = None
+            self.last_news_index = 0
+            self.last_story_text = None
+            response = "All right — I've cleared our conversation history and my saved news selection for this session."
+        elif intent == "cancel":
             self.pending_intent = None
             response = "No problem — cancelled. What would you like to do instead?"
         elif intent == "weather":
@@ -273,7 +290,8 @@ class DeskRobot:
                 previous_message=previous_message,
             )
 
-        self.context.add_turn(original_message, response)
+        if intent != "forget_context":
+            self.context.add_turn(original_message, response)
         return response
 
     @staticmethod

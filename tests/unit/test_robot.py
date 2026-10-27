@@ -369,3 +369,26 @@ def test_behaviour_reaction_is_emitted_as_a_semantic_event() -> None:
     assert reactions[-1].data["intent"] == "greeting"
     assert reactions[-1].data["reaction"] == "greeting"
     assert reactions[-1].data["interactions"] == 1
+
+
+def test_robot_can_forget_session_conversation_on_request() -> None:
+    robot = make_information_robot()
+    robot.respond("I saw a strange bird today")
+    robot.respond("show me the news")
+    assert robot.context.turns
+    assert robot.news_cache is not None
+
+    response = robot.respond("forget our conversation")
+
+    assert "cleared" in response.lower()
+    assert robot.context.turns == ()
+    assert robot.context.last_user_message is None
+    assert robot.news_cache is None
+    assert robot.last_news_index == 0
+
+
+def test_forget_conversation_does_not_clear_history_for_unrelated_phrases() -> None:
+    robot = make_information_robot()
+    robot.respond("I want to forget it was raining")
+
+    assert robot.context.last_user_message == "I want to forget it was raining"
