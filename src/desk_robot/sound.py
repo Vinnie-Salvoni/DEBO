@@ -79,7 +79,7 @@ class SoundManager:
                     os.fspath(path),
                     winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
                 )
-        except OSError, RuntimeError:
+        except (OSError, RuntimeError):
             # Audio is optional; sound failures must not break DEBO.
             return
 
