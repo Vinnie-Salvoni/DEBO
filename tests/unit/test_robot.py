@@ -246,6 +246,19 @@ def test_next_story_advances_the_cached_news_selection() -> None:
     assert "Second real headline" in response
 
 
+
+def test_news_follow_up_context_expires_after_an_unrelated_topic() -> None:
+    robot = make_information_robot()
+    robot.respond("show me the news")
+
+    robot.respond("hello")
+    response = robot.respond("tell me more")
+
+    assert robot.last_intent == "unknown"
+    assert robot.news_cache is None
+    assert robot.last_story_text is None
+    assert "Tell me more" in response
+
 def test_news_provider_failure_is_recoverable() -> None:
     robot = make_information_robot(news_fail=True)
 

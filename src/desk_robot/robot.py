@@ -194,6 +194,13 @@ class DeskRobot:
         if intent != "weather":
             self.last_weather_location = None
 
+        # News follow-ups belong to the active news exchange, not indefinitely
+        # to the most recent headlines fetched in an earlier topic.
+        if intent not in {"news", "next_news", "full_story"}:
+            self.news_cache = None
+            self.last_news_index = 0
+            self.last_story_text = None
+
         self.last_intent = intent
         reaction = self.behaviour.observe(intent)
         self._emit_event(
