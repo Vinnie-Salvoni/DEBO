@@ -389,6 +389,12 @@ class DeboFace:
         )
         self._ticker_x = 0.0
         self._ticker_speed = 1.25
+        self.next_story_button = tk.Button(
+            self.info_panel, text="NEXT STORY  →", command=lambda: self.submit_message("next story"),
+            bg="#12313A", fg="#D9FFFF", activebackground="#1B4C58",
+            activeforeground="#FFFFFF", relief="flat", padx=12, pady=6,
+            font=("Segoe UI", 9, "bold"), cursor="hand2",
+        )
         self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
         self.info_panel.pack_forget()
         response_panel = tk.Frame(self.root, bg=PANEL, padx=18, pady=14)
@@ -511,7 +517,7 @@ class DeboFace:
         lowered = message.lower()
         if any(word in lowered for word in ("weather", "temperature", "forecast")):
             self.show_information_loading("weather")
-        elif any(word in lowered for word in ("news", "headlines", "latest stories", "what's happening", "what is happening")):
+        elif any(word in lowered for word in ("news", "headlines", "latest stories", "what's happening", "what is happening", "next story", "another story", "next headline")):
             self.show_information_loading("news")
         else:
             self.hide_information()
@@ -618,7 +624,7 @@ class DeboFace:
             self.busy = False
             if kind == "ok":
                 self._present_latest_information()
-            elif getattr(self.robot, "last_intent", "") in {"weather", "news"}:
+            elif getattr(self.robot, "last_intent", "") in {"weather", "news", "next_news"}:
                 self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
                 self.info_title.configure(text=f"{self.robot.last_intent.upper()}  /  UNAVAILABLE")
                 self.info_main.configure(text="I couldn't reach the information service. Please try again.")
@@ -640,11 +646,13 @@ class DeboFace:
 
     def hide_information(self) -> None:
         self.info_panel.pack_forget()
+        self.next_story_button.pack_forget()
         self.ticker_canvas.itemconfigure(self._ticker_item, text="")
         self._ticker_text = ""
 
     def show_information_loading(self, kind: str) -> None:
         self.info_panel.pack(fill="x", padx=24, pady=(4, 8))
+        self.next_story_button.pack_forget()
         self.info_title.configure(text=f"{kind.upper()}  /  CONNECTING")
         self.info_main.configure(text="One moment — I'm checking the latest information.")
         self.info_meta.configure(text="Live data · Network requests run in the background")
@@ -678,8 +686,18 @@ class DeboFace:
         self.info_main.configure(text=f"{symbol}   {report.temperature_c:.1f}°C   ·   {condition}")
         observed = report.observed_at.strftime("%H:%M") if report.observed_at else "time unavailable"
         fetched = report.fetched_at.strftime("%H:%M UTC") if report.fetched_at else "time unavailable"
-        self.info_meta.configure(text=f"{report.provider}  ·  Observed {observed}  ·  Retrieved {fetched}")
-        self._set_ticker(f"CURRENT CONDITIONS  •  {report.location}  •  {condition}  •  {report.temperature_c:.1f}°C")
+        high_low = ""
+        if report.daily_high_c is not None and report.daily_low_c is not None:
+            high_low = f"  ·  Today H {report.daily_high_c:.0f}° / L {report.daily_low_c:.0f}°C"
+        forecast = f"  ·  Outlook {report.forecast_condition}" if report.forecast_condition else ""
+        self.info_meta.configure(text=f"{report.provider}  ·  Observed {observed}  ·  Retrieved {fetched}{high_low}{forecast}")
+        self.next_story_button.pack_forget()
+        ticker = f"CURRENT CONDITIONS  •  {report.location}  •  {condition}  •  {report.temperature_c:.1f}°C"
+        if high_low:
+            ticker += f"  •  {high_low.strip(' ·')}"
+        if forecast:
+            ticker += f"  •  {forecast.strip(' ·')}"
+        self._set_ticker(ticker)
 
     def present_news(self, report) -> None:
         articles = tuple(report.articles or ())
@@ -690,9 +708,11 @@ class DeboFace:
             self.info_meta.configure(text=f"{report.provider} · Try again in a moment")
             self._set_ticker("NO HEADLINES AVAILABLE")
             return
-        first = articles[0]
-        self.info_title.configure(text=f"NEWS  /  TOP STORY  ·  1 OF {len(articles)}")
+        index = int(getattr(self.robot, "last_news_index", 0)) % len(articles)
+        first = articles[index]
+        self.info_title.configure(text=f"NEWS  /  TOP STORY  ·  {index + 1} OF {len(articles)}")
         self.info_main.configure(text=first.title)
+        self.next_story_button.pack(anchor="e", pady=(8, 0))
         published = first.published_at.strftime("%d %b · %H:%M UTC") if first.published_at else "publication time unavailable"
         self.info_meta.configure(text=f"{first.source or report.provider}  ·  {published}  ·  Retrieved {report.fetched_at.strftime('%H:%M UTC')}")
         self._set_ticker("     •     ".join(f"{index}. {article.title} — {article.source}" for index, article in enumerate(articles, start=1)))
