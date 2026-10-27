@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from pathlib import Path
 
 import pytest
@@ -80,3 +78,13 @@ def test_combined_wake_and_command_emits_both_events(monkeypatch) -> None:
     assert [kind for kind, _text in events] == ["wake", "transcript"]
     assert events[1][1] == "how are you"
     assert voice._wake_until == 0.0
+
+
+
+def test_voice_controller_contains_input_only_no_speech_synthesis() -> None:
+    source = Path(__file__).with_name("voice.py").read_text(encoding="utf-8")
+
+    assert not hasattr(VoiceController, "speak_async")
+    assert "pyttsx3" not in source
+    assert "_speech_queue" not in source
+    assert "_play_robot_voice_file" not in source
